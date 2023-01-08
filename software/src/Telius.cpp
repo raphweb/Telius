@@ -8,11 +8,12 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <gason.h>
+#include <base64.h>
 
 #include "DisplayConfig.h"
 
 #define US_TO_SECONDS_FACTOR 1000000
-#define SLEEP_DURATION 60
+#define SLEEP_DURATION 300 // in seconds
 
 #define ESP_NAME "telius"
 //#define SAVE_CREDENTIALS
@@ -37,45 +38,50 @@
 
 
 Preferences preferences;
+HTTPClient https;
+char currMonday[9] = "";
+char nextFriday[9] = "";
 
 // This is lets-encrypt-r3.pem, the intermediate Certificate Authority that
 // signed the server certifcate for the WebUntis server https://ajax.webuntis.com
 // used here. This certificate is valid until Sep 15 16:00:00 2025 GMT
 // See: https://letsencrypt.org/certificates/
 const char* rootCACertificate PROGMEM = \
-"-----BEGIN CERTIFICATE-----\n" \
-"MIIFFjCCAv6gAwIBAgIRAJErCErPDBinU/bWLiWnX1owDQYJKoZIhvcNAQELBQAw\n" \
-"TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n" \
-"cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjAwOTA0MDAwMDAw\n" \
-"WhcNMjUwOTE1MTYwMDAwWjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n" \
-"RW5jcnlwdDELMAkGA1UEAxMCUjMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n" \
-"AoIBAQC7AhUozPaglNMPEuyNVZLD+ILxmaZ6QoinXSaqtSu5xUyxr45r+XXIo9cP\n" \
-"R5QUVTVXjJ6oojkZ9YI8QqlObvU7wy7bjcCwXPNZOOftz2nwWgsbvsCUJCWH+jdx\n" \
-"sxPnHKzhm+/b5DtFUkWWqcFTzjTIUu61ru2P3mBw4qVUq7ZtDpelQDRrK9O8Zutm\n" \
-"NHz6a4uPVymZ+DAXXbpyb/uBxa3Shlg9F8fnCbvxK/eG3MHacV3URuPMrSXBiLxg\n" \
-"Z3Vms/EY96Jc5lP/Ooi2R6X/ExjqmAl3P51T+c8B5fWmcBcUr2Ok/5mzk53cU6cG\n" \
-"/kiFHaFpriV1uxPMUgP17VGhi9sVAgMBAAGjggEIMIIBBDAOBgNVHQ8BAf8EBAMC\n" \
-"AYYwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMBMBIGA1UdEwEB/wQIMAYB\n" \
-"Af8CAQAwHQYDVR0OBBYEFBQusxe3WFbLrlAJQOYfr52LFMLGMB8GA1UdIwQYMBaA\n" \
-"FHm0WeZ7tuXkAXOACIjIGlj26ZtuMDIGCCsGAQUFBwEBBCYwJDAiBggrBgEFBQcw\n" \
-"AoYWaHR0cDovL3gxLmkubGVuY3Iub3JnLzAnBgNVHR8EIDAeMBygGqAYhhZodHRw\n" \
-"Oi8veDEuYy5sZW5jci5vcmcvMCIGA1UdIAQbMBkwCAYGZ4EMAQIBMA0GCysGAQQB\n" \
-"gt8TAQEBMA0GCSqGSIb3DQEBCwUAA4ICAQCFyk5HPqP3hUSFvNVneLKYY611TR6W\n" \
-"PTNlclQtgaDqw+34IL9fzLdwALduO/ZelN7kIJ+m74uyA+eitRY8kc607TkC53wl\n" \
-"ikfmZW4/RvTZ8M6UK+5UzhK8jCdLuMGYL6KvzXGRSgi3yLgjewQtCPkIVz6D2QQz\n" \
-"CkcheAmCJ8MqyJu5zlzyZMjAvnnAT45tRAxekrsu94sQ4egdRCnbWSDtY7kh+BIm\n" \
-"lJNXoB1lBMEKIq4QDUOXoRgffuDghje1WrG9ML+Hbisq/yFOGwXD9RiX8F6sw6W4\n" \
-"avAuvDszue5L3sz85K+EC4Y/wFVDNvZo4TYXao6Z0f+lQKc0t8DQYzk1OXVu8rp2\n" \
-"yJMC6alLbBfODALZvYH7n7do1AZls4I9d1P4jnkDrQoxB3UqQ9hVl3LEKQ73xF1O\n" \
-"yK5GhDDX8oVfGKF5u+decIsH4YaTw7mP3GFxJSqv3+0lUFJoi5Lc5da149p90Ids\n" \
-"hCExroL1+7mryIkXPeFM5TgO9r0rvZaBFOvV2z0gp35Z0+L4WPlbuEjN/lxPFin+\n" \
-"HlUjr8gRsI3qfJOQFy/9rKIJR0Y/8Omwt/8oTWgy1mdeHmmjk7j1nYsvC9JSQ6Zv\n" \
-"MldlTTKB3zhThV1+XWYp6rjd5JW1zbVWEkLNxE7GJThEUG3szgBVGP7pSWTUTsqX\n" \
-"nLRbwHOoq7hHwg==\n" \
-"-----END CERTIFICATE-----\n";
+  "-----BEGIN CERTIFICATE-----\n" \
+  "MIIFFjCCAv6gAwIBAgIRAJErCErPDBinU/bWLiWnX1owDQYJKoZIhvcNAQELBQAw\n" \
+  "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n" \
+  "cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjAwOTA0MDAwMDAw\n" \
+  "WhcNMjUwOTE1MTYwMDAwWjAyMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n" \
+  "RW5jcnlwdDELMAkGA1UEAxMCUjMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK\n" \
+  "AoIBAQC7AhUozPaglNMPEuyNVZLD+ILxmaZ6QoinXSaqtSu5xUyxr45r+XXIo9cP\n" \
+  "R5QUVTVXjJ6oojkZ9YI8QqlObvU7wy7bjcCwXPNZOOftz2nwWgsbvsCUJCWH+jdx\n" \
+  "sxPnHKzhm+/b5DtFUkWWqcFTzjTIUu61ru2P3mBw4qVUq7ZtDpelQDRrK9O8Zutm\n" \
+  "NHz6a4uPVymZ+DAXXbpyb/uBxa3Shlg9F8fnCbvxK/eG3MHacV3URuPMrSXBiLxg\n" \
+  "Z3Vms/EY96Jc5lP/Ooi2R6X/ExjqmAl3P51T+c8B5fWmcBcUr2Ok/5mzk53cU6cG\n" \
+  "/kiFHaFpriV1uxPMUgP17VGhi9sVAgMBAAGjggEIMIIBBDAOBgNVHQ8BAf8EBAMC\n" \
+  "AYYwHQYDVR0lBBYwFAYIKwYBBQUHAwIGCCsGAQUFBwMBMBIGA1UdEwEB/wQIMAYB\n" \
+  "Af8CAQAwHQYDVR0OBBYEFBQusxe3WFbLrlAJQOYfr52LFMLGMB8GA1UdIwQYMBaA\n" \
+  "FHm0WeZ7tuXkAXOACIjIGlj26ZtuMDIGCCsGAQUFBwEBBCYwJDAiBggrBgEFBQcw\n" \
+  "AoYWaHR0cDovL3gxLmkubGVuY3Iub3JnLzAnBgNVHR8EIDAeMBygGqAYhhZodHRw\n" \
+  "Oi8veDEuYy5sZW5jci5vcmcvMCIGA1UdIAQbMBkwCAYGZ4EMAQIBMA0GCysGAQQB\n" \
+  "gt8TAQEBMA0GCSqGSIb3DQEBCwUAA4ICAQCFyk5HPqP3hUSFvNVneLKYY611TR6W\n" \
+  "PTNlclQtgaDqw+34IL9fzLdwALduO/ZelN7kIJ+m74uyA+eitRY8kc607TkC53wl\n" \
+  "ikfmZW4/RvTZ8M6UK+5UzhK8jCdLuMGYL6KvzXGRSgi3yLgjewQtCPkIVz6D2QQz\n" \
+  "CkcheAmCJ8MqyJu5zlzyZMjAvnnAT45tRAxekrsu94sQ4egdRCnbWSDtY7kh+BIm\n" \
+  "lJNXoB1lBMEKIq4QDUOXoRgffuDghje1WrG9ML+Hbisq/yFOGwXD9RiX8F6sw6W4\n" \
+  "avAuvDszue5L3sz85K+EC4Y/wFVDNvZo4TYXao6Z0f+lQKc0t8DQYzk1OXVu8rp2\n" \
+  "yJMC6alLbBfODALZvYH7n7do1AZls4I9d1P4jnkDrQoxB3UqQ9hVl3LEKQ73xF1O\n" \
+  "yK5GhDDX8oVfGKF5u+decIsH4YaTw7mP3GFxJSqv3+0lUFJoi5Lc5da149p90Ids\n" \
+  "hCExroL1+7mryIkXPeFM5TgO9r0rvZaBFOvV2z0gp35Z0+L4WPlbuEjN/lxPFin+\n" \
+  "HlUjr8gRsI3qfJOQFy/9rKIJR0Y/8Omwt/8oTWgy1mdeHmmjk7j1nYsvC9JSQ6Zv\n" \
+  "MldlTTKB3zhThV1+XWYp6rjd5JW1zbVWEkLNxE7GJThEUG3szgBVGP7pSWTUTsqX\n" \
+  "nLRbwHOoq7hHwg==\n" \
+  "-----END CERTIFICATE-----\n";
 
 void setClock() {
-  configTime(0, 0, "pool.ntp.org");
+  // Europe/Berlin timezone
+  // see: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org");
 
   DEBUG_PRINT("Waiting for NTP time sync: ");
   time_t nowSecs = time(nullptr);
@@ -88,10 +94,29 @@ void setClock() {
 
   DEBUG_PRINTLN();
   struct tm timeinfo;
-  gmtime_r(&nowSecs, &timeinfo);
+  localtime_r(&nowSecs, &timeinfo);
   DEBUG_PRINT("Current time: ");
   DEBUG_PRINT(asctime(&timeinfo));
+  const uint8_t daysTillFriday = (12 - timeinfo.tm_wday) % 7;
+  time_t nTimeSecs = nowSecs + 86400 * daysTillFriday;
+  struct tm nTime;
+  localtime_r(&nTimeSecs, &nTime);
+  DEBUG_PRINT("Next Friday: ");
+  strftime(nextFriday, 9, "%Y%m%d", &nTime);
+  DEBUG_PRINTLN(nextFriday);
+  nTimeSecs = nowSecs + 86400 * (daysTillFriday - 4);
+  localtime_r(&nTimeSecs, &nTime);
+  DEBUG_PRINT("Current week Monday: ");
+  strftime(currMonday, 9, "%Y%m%d", &nTime);
+  DEBUG_PRINTLN(currMonday);
 }
+
+struct SessionData {
+  const uint16_t klasseId;
+  const uint16_t personId;
+  const String sessionCookie;
+  const uint8_t personType;
+};
 
 typedef struct {
   const char time1[6];
@@ -143,35 +168,146 @@ void drawTable() {
   display.print(pauseStr);
 }
 
+
+SessionData *currentSession = nullptr;
+
+bool webUntisLogin(WiFiClientSecure &client) {
+  const String school = preferences.getString("WU_SCHOOL");
+  const String user = preferences.getString("WU_USER");
+  const String pass = preferences.getString("WU_PASS");
+  DEBUG_PRINTLN("Loaded WebUntis school: " + school + ", user: " + user + ", pass: " + pass);
+
+  if (https.begin(client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
+    int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"authenticate\",\"params\":{\"user\":\""
+        + user + "\",\"password\":\"" + pass + "\",\"client\":\"" + String(ESP_NAME) + "243\"},\"jsonrpc\":\"2.0\"}");
+
+    if (httpCode > 0) {
+      DEBUG_PRINTLN("[HTTPS] POST authenticate... code: " + String(httpCode));
+
+      if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+        String payload = https.getString();
+        DEBUG_PRINTLN(payload);
+        char *source = payload.begin();
+        char *endptr;
+        JsonValue value;
+        JsonAllocator allocator;
+        int status = jsonParse(source, &endptr, &value, allocator);
+        if (status == JSON_OK) {
+          uint16_t klasseId = 0;
+          uint16_t personId = 0;
+          String *sessionId = nullptr;
+          uint8_t personType = 0;
+          if (value.getTag() == JSON_OBJECT) {
+            for(auto r:value) {
+              if (strcmp(r->key, "result") == 0 && r->value.getTag() == JSON_OBJECT) {
+                for(auto v:r->value) {
+                  if (strcmp(v->key, "sessionId") == 0 && v->value.getTag() == JSON_STRING) {
+                    sessionId = new String(v->value.toString());
+                  } else if (strcmp(v->key, "personId") == 0 && v->value.getTag() == JSON_NUMBER) {
+                    personId = v->value.toNumber();
+                  } else if (strcmp(v->key, "klasseId") == 0 && v->value.getTag() == JSON_NUMBER) {
+                    klasseId = v->value.toNumber();
+                  } else if (strcmp(v->key, "personType") == 0 && v->value.getTag() == JSON_NUMBER) {
+                    personType = v->value.toNumber();
+                  }
+                }
+              }
+            }
+            if (sessionId) {
+              currentSession = new SessionData{klasseId, personId,
+                  String("JSESSIONID=" + *sessionId + "; schoolname=_" + base64::encode(school)), personType};
+              DEBUG_PRINTLN("Using session id: " + currentSession->sessionCookie);
+              https.end();
+              return true;
+            } else {
+              https.end();
+              return false;
+            }
+          }
+        } else {
+          DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+          https.end();
+          return false;
+        }
+      }
+    } else {
+      DEBUG_PRINTLN("[HTTPS] authenticate... failed, error: " + https.errorToString(httpCode));
+      https.end();
+      return false;
+    }
+  }
+  https.end();
+  return false;
+}
+
+String webUntisRequest(WiFiClientSecure &client, String method, String params = "") {
+  if (currentSession) {
+    const String school = preferences.getString("WU_SCHOOL");
+    if (https.begin(client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
+      https.addHeader("Cookie", currentSession->sessionCookie);
+      int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"" + method + "\",\"params\":{" + params + "},\"jsonrpc\":\"2.0\"}");
+      if (httpCode > 0) {
+        DEBUG_PRINTLN("[HTTPS] POST " + method + "... code: " + httpCode);
+        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          String payload = https.getString();
+          DEBUG_PRINTLN(payload);
+          return payload;
+        }
+      } else {
+        DEBUG_PRINTLN("[HTTPS] POST " + method + "... failed, error: " + https.errorToString(httpCode));
+      }
+    }
+    https.end();
+  }
+  return "";
+}
+
+String webUntisTimegrid(WiFiClientSecure &client) {
+  return webUntisRequest(client, "getTimegridUnits");
+}
+
+String webUntisTimetable(WiFiClientSecure &client) {
+  if (currentSession) {
+    return webUntisRequest(client, "getTimetable", "\"options\":{\"element\":{\"id\":\"" + String(currentSession->personId) + "\",\"type\":" +
+      String(currentSession->personType) + "},\"startDate\":\"" + currMonday + "\",\"endDate\":\"" + nextFriday + "\",\"klasseFields\":[\"name\"]," +
+      "\"teacherFields\":[\"name\"],\"subjectFields\":[\"name\"],\"roomFields\":[\"name\"]}");
+  }
+  return "";
+}
+
+void webUntisLogout(WiFiClientSecure &client) {
+  webUntisRequest(client, "logout");
+  currentSession = nullptr;
+}
+
 void setup() {
   Serial.begin(115200);
   while(!Serial) {}
   preferences.begin(ESP_NAME);
 
 #ifdef SAVE_CREDENTIALS
-  const String wifissid = "WLAN";
-  const String wifipass = "****";
-  const String webUntisSchool = "school";
-  const String webUntisUser = "USER";
-  const String webUntisPass = "****";
-  preferences.clear();
-  preferences.putString("WL_SSID", wifissid);
-  preferences.putString("WL_PASS", wifipass);
-  preferences.putString("WU_SCHOOL", webUntisSchool);
-  preferences.putString("WU_USER", webUntisUser);
-  preferences.putString("WU_PASS", webUntisPass);
-#else
+  {
+    const String wifissid = "WLAN";
+    const String wifipass = "****";
+    const String webUntisSchool = "school";
+    const String webUntisUser = "USER";
+    const String webUntisPass = "****";
+    preferences.clear();
+    preferences.putString("WL_SSID", wifissid);
+    preferences.putString("WL_PASS", wifipass);
+    preferences.putString("WU_SCHOOL", webUntisSchool);
+    preferences.putString("WU_USER", webUntisUser);
+    preferences.putString("WU_PASS", webUntisPass);
+    preferences.end();
+    esp_deep_sleep_start();
+  }
+#endif
   const String wifissid = preferences.getString("WL_SSID");
   const String wifipass = preferences.getString("WL_PASS");
   DEBUG_PRINTLN("Loaded SSID: " + wifissid + ", PASS: " + wifipass);
-  const String webUntisSchool = preferences.getString("WU_SCHOOL");
-  const String webUntisUser = preferences.getString("WU_USER");
-  const String webUntisPass = preferences.getString("WU_PASS");
-  DEBUG_PRINTLN("Loaded WebUntis school: " + webUntisSchool + ", user: " + webUntisUser + ", pass: " + webUntisPass);
-#endif
   
   // Connect to Wi-Fi network with SSID and password
-  DEBUG_PRINTLN("Connecting to " + String(wifissid));
+  DEBUG_PRINTLN("Connecting to " + wifissid);
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifissid.c_str(), wifipass.c_str());
   WiFi.setHostname(ESP_NAME);
@@ -187,39 +323,16 @@ void setup() {
   DEBUG_PRINT("IP address: ");
   DEBUG_PRINTLN(WiFi.localIP());
 
+  // secure wifi connection (for https)
   WiFiClientSecure *client = new WiFiClientSecure;
 
   if(client) {
     client->setCACert(rootCACertificate);
 
-    {
-      HTTPClient https;
-  
-      DEBUG_PRINTLN("[HTTPS] begin...");
-      if (https.begin(*client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + webUntisSchool)) {  // HTTPS
-        DEBUG_PRINTLN("[HTTPS] POST...");
-        // start connection and send HTTP header
-        int httpCode = https.POST("{\"id\":\"243\",\"method\":\"authenticate\",\"params\":{\"user\":\"" + webUntisUser + "\",\"password\":\"" + webUntisPass + "\",\"client\":\"" + String(ESP_NAME) + "\"},\"jsonrpc\":\"2.0\"}");
-  
-        // httpCode will be negative on error
-        if (httpCode > 0) {
-          // HTTP header has been send and Server response header has been handled
-          Serial.printf("[HTTPS] POST... code: %d\n", httpCode);
-  
-          // file found at server
-          if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-            String payload = https.getString();
-            DEBUG_PRINTLN(payload);
-          }
-        } else {
-          Serial.printf("[HTTPS] POST... failed, error: %s\n", https.errorToString(httpCode).c_str());
-        }
-        Serial.flush();
-  
-        https.end();
-      } else {
-        DEBUG_PRINTLN("[HTTPS] Unable to connect");
-      }
+    // get current time table for the week via WebUntis JSON RPC API
+    if (webUntisLogin(*client)) {
+      webUntisTimetable(*client);
+      webUntisLogout(*client);
     }
   
     delete client;
