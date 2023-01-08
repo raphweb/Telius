@@ -7,7 +7,7 @@
 #include "esp_wpa2.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include <cJSON.h>
+#include <gason.h>
 
 #include "DisplayConfig.h"
 
@@ -190,7 +190,7 @@ void setup() {
   WiFiClientSecure *client = new WiFiClientSecure;
 
   if(client) {
-    client -> setCACert(rootCACertificate);
+    client->setCACert(rootCACertificate);
 
     {
       HTTPClient https;
