@@ -13,8 +13,8 @@
 
 #include "DisplayConfig.h"
 
-#define US_TO_SECONDS_FACTOR 1000000
-#define SLEEP_DURATION 300 // in seconds
+#define US_TO_SECONDS_FACTOR 1000000L
+#define SLEEP_DURATION 60 // in seconds
 
 #define ESP_NAME "telius"
 //#define SAVE_CREDENTIALS
@@ -44,6 +44,7 @@ HTTPClient https;
 char currMonday[9] = "";
 char nextFriday[9] = "";
 uint32_t currentMonday = 0; // used to store the date of the monday of the current week in YYYYmmdd
+uint64_t secondsTillNextWakeup = 0;
 
 // This is lets-encrypt-r3.pem, the intermediate Certificate Authority that
 // signed the server certifcate for the WebUntis server https://ajax.webuntis.com
@@ -88,7 +89,7 @@ void setClock() {
 
   DEBUG_PRINT("Waiting for NTP time sync: ");
   time_t nowSecs = time(nullptr);
-  while (nowSecs < 8 * 3600 * 2) {
+  while (nowSecs < 3600) { // maximum wait for an hour
     delay(500);
     DEBUG_PRINT(".");
     yield();
@@ -100,6 +101,7 @@ void setClock() {
   localtime_r(&nowSecs, &timeinfo);
   DEBUG_PRINT("Current time: ");
   DEBUG_PRINT(asctime(&timeinfo));
+
   const uint8_t daysTillFriday = (12 - timeinfo.tm_wday) % 7;
   time_t nTimeSecs = nowSecs + 86400 * daysTillFriday;
   struct tm nTime;
@@ -113,6 +115,15 @@ void setClock() {
   strftime(currMonday, 9, "%Y%m%d", &nTime);
   DEBUG_PRINTLN(currMonday);
   currentMonday = strtoul(currMonday, NULL, 10);
+
+  const uint8_t hoursTill5 = (29 - timeinfo.tm_hour) % 24;
+  secondsTillNextWakeup = 3600 * hoursTill5 - 60; // updating will take about a minute
+  time_t wTimeSecs = nowSecs + secondsTillNextWakeup;
+  struct tm wTime;
+  localtime_r(&wTimeSecs, &wTime);
+  // the wakeup time will drift over time, but will always happen some time between 5 and 6 am
+  DEBUG_PRINT("Next wakeup will be scheduled at: ");
+  DEBUG_PRINTLN(asctime(&wTime));
 }
 
 #define NUM_DAYS 5
@@ -480,15 +491,17 @@ void setup() {
 
     display.powerOff();
     DEBUG_PRINTLN("Display has been updated.");
+    DEBUG_PRINT("Waking up in ");
+    DEBUG_PRINT(secondsTillNextWakeup);
+    DEBUG_PRINTLN(" seconds.");
+    DEBUG_PRINTLN("Going to deep sleep...");
+    esp_sleep_enable_timer_wakeup(secondsTillNextWakeup * US_TO_SECONDS_FACTOR);
   } else {
-    DEBUG_PRINTLN("Display already up to date.");
+    DEBUG_PRINTLN("Waking up in " + String(SLEEP_DURATION) + " seconds...");
+    esp_sleep_enable_timer_wakeup(SLEEP_DURATION * US_TO_SECONDS_FACTOR);
   }
-
   preferences.end();
 
-  // deep sleep configuration
-  esp_sleep_enable_timer_wakeup(SLEEP_DURATION * US_TO_SECONDS_FACTOR);
-  DEBUG_PRINTLN("Going to deep sleep...");
   delay(1000);
   Serial.flush();
   esp_deep_sleep_start();
