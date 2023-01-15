@@ -10,6 +10,7 @@
 #include <HTTPClient.h>
 #include <gason.h>
 #include <base64.h>
+#include <vector>
 
 #include "DisplayConfig.h"
 
@@ -127,8 +128,8 @@ void setClock() {
   DEBUG_PRINTLN(asctime(&wTime));
 }
 
-#define NUM_DAYS 5
-#define NUM_PERIODS 6
+#define LOHA(n) (n&15) // lower half of a byte
+#define UPHA(n) (n>>4) // upper half of a byte
 
 struct SessionData {
   const uint16_t klasseId;
@@ -138,92 +139,95 @@ struct SessionData {
 };
 
 struct TTRowHeaderCell {
-  const char time1[6];
-  const char time2[6];
+  const uint16_t time1;
+  const uint16_t time2;
   const uint8_t offset;
-};
-
-struct TTColHeaderCell {
-  const char day[11];
-  const uint16_t offset;
 };
 
 struct TTLesson {
   char name[4] = {0};
   char teacher[5] = {0};
+  char teacherName[32] = {0};
   char room[11] = {0};
+  uint8_t dayLesson = 0;
   uint8_t changedFlags = 0;
 };
 
-uint8_t getPeriodNumberForStartTime(uint16_t startTime) {
-  switch (startTime) {
-    case  800: return 0;
-    case  845: return 1;
-    case  930: return 2;
-    case 1040: return 3;
-    case 1125: return 4;
-    case 1210: return 5;
-    default: return 0;
+#define getTimeStrForTime(timeNumber) \
+  { \
+    timeNumber / 1000u + '0', \
+    timeNumber / 100u % 10u + '0', \
+    ':', \
+    timeNumber % 100u / 10u + '0', \
+    timeNumber % 10u + '0', \
+    0 \
   }
-}
 
 struct TimeTable {
-  const TTRowHeaderCell periods[NUM_PERIODS] = {
-    {"08:00", "08:45", 1},
-    {"08:45", "09:30", 3},
-    {"09:30", "10:15", 5},
-    {"10:40", "11:25", 8},
-    {"11:25", "12:10", 10},
-    {"12:10", "12:55", 12}
+  const char days[7][11] = {
+    "Montag",
+    "Dienstag",
+    "Mittwoch",
+    "Donnerstag",
+    "Freitag",
+    "Samstag",
+    "Sonntag"
   };
-  const TTColHeaderCell days[NUM_DAYS] = {
-    {"Montag", 84},
-    {"Dienstag", 174},
-    {"Mittwoch", 277},
-    {"Donnerstag", 381},
-    {"Freitag", 514}
-  };
-  TTLesson lessonGrid[NUM_DAYS][NUM_PERIODS];
+  uint8_t maxDays = 0;
+  uint8_t maxPeriods = 0;
+  std::vector<TTRowHeaderCell> *periods = new std::vector<TTRowHeaderCell>();
+  std::vector<TTLesson> *lessonGrid = new std::vector<TTLesson>();
   uint32_t lastUpdateDay = 0; // used to store the day of the last update in YYYYmmdd, e.g., 20230113
 };
 
 TimeTable timeTable;
 
+uint8_t getPeriodNumberForStartTime(uint16_t startTime) {
+  uint8_t ret = 0;
+  for(const auto& period : *timeTable.periods) {
+    if (period.time1 == startTime) return ret;
+    ret++;
+  }
+  return 0;
+}
+
 const char pauseStr[] = "Pause";
 const uint8_t rowHeight = 30;
 
-void drawTable() {
+void drawView1() {
   display.setFont(&FreeSans12pt7b);
   display.setTextColor(GxEPD_BLACK);
-  for(const auto& column : timeTable.days) {
-    display.drawFastVLine(column.offset - 5, 6, display.height() - 12, GxEPD_BLACK);
-    display.setCursor(column.offset, 31);
-    display.print(column.day);
+  for(uint8_t cDay = 0; cDay < timeTable.maxDays; cDay++) {
+    const char dayName[] = {timeTable.days[cDay][0], timeTable.days[cDay][1], 0};
+    display.drawFastVLine(79 + cDay*104, 6, display.height() - 12, GxEPD_BLACK);
+    display.setCursor(84 + cDay*104, 31);
+    display.print(dayName);
   }
-  for(const auto& row : timeTable.periods) {
+  for(uint8_t cPeriod = 0; cPeriod < timeTable.maxPeriods; cPeriod++) {
+    const auto& row = timeTable.periods->at(cPeriod);
     display.drawFastHLine(0, 11 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
     display.setCursor(6, 33 + rowHeight*row.offset);
-    display.print(row.time1);
+    const char time1[] = getTimeStrForTime(row.time1);
+    display.print(time1);
     display.drawFastHLine(15, 10 + rowHeight + rowHeight*row.offset, 40, GxEPD_BLACK);
     display.setCursor(6, 33 + rowHeight*(row.offset + 1));
-    display.print(row.time2);
+    const char time2[] = getTimeStrForTime(row.time2);
+    display.print(time2);
     display.drawFastHLine(0, 10 + rowHeight*2 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
   }
   display.setCursor(6, 33 + rowHeight*7);
   display.print(pauseStr);
   // fill time table
   display.setFont(&FreeSans9pt7b);
-  for(uint8_t cDay = 0; cDay < NUM_DAYS; cDay++) {
-    const uint16_t columnOffset = timeTable.days[cDay].offset;
-    for(uint8_t cPeriod = 0; cPeriod < NUM_PERIODS; cPeriod++) {
-      const uint8_t rowOffset = timeTable.periods[cPeriod].offset;
-      display.setCursor(columnOffset, 33 + rowHeight*rowOffset);
-      display.print(timeTable.lessonGrid[cDay][cPeriod].name);
-      display.setCursor(columnOffset + 50, 33 + rowHeight*rowOffset);
-      display.print(timeTable.lessonGrid[cDay][cPeriod].teacher);
-      display.setCursor(columnOffset, 33 + rowHeight*(rowOffset+1));
-      display.print(timeTable.lessonGrid[cDay][cPeriod].room);
-    }
+  for(const auto& lesson : *timeTable.lessonGrid) {
+    const uint16_t columnOffset = 84 + UPHA(lesson.dayLesson) *104;
+    const uint8_t rowOffset = timeTable.periods->at(LOHA(lesson.dayLesson)).offset;
+    display.setCursor(columnOffset, 33 + rowHeight*rowOffset);
+    display.print(lesson.name);
+    display.setCursor(columnOffset + 51, 33 + rowHeight*rowOffset);
+    display.print(lesson.teacher);
+    display.setCursor(columnOffset, 33 + rowHeight*(rowOffset+1));
+    display.print(lesson.room);
   }
 }
 
@@ -325,11 +329,15 @@ String webUntisTimegrid(WiFiClientSecure &client) {
   return webUntisRequest(client, "getTimegridUnits");
 }
 
+String webUntisTeachers(WiFiClientSecure &client) {
+  return webUntisRequest(client, "getTeachers");
+}
+
 String webUntisTimetable(WiFiClientSecure &client) {
   if (currentSession) {
     return webUntisRequest(client, "getTimetable", "\"options\":{\"element\":{\"id\":\"" + String(currentSession->personId) + "\",\"type\":" +
       String(currentSession->personType) + "},\"startDate\":" + currMonday + ",\"endDate\":" + nextFriday + ",\"klasseFields\":[\"name\"]," +
-      "\"teacherFields\":[\"name\"],\"subjectFields\":[\"name\"],\"roomFields\":[\"name\"]}");
+      "\"teacherFields\":[\"name\",\"longname\"],\"subjectFields\":[\"name\"],\"roomFields\":[\"name\"]}");
   }
   return "";
 }
@@ -339,25 +347,87 @@ void webUntisLogout(WiFiClientSecure &client) {
   currentSession = nullptr;
 }
 
-String *getEntity(JsonValue &v, bool &changed) {
+String *getEntity(JsonValue &v, bool &changed, const char *entityName = "name") {
   String *ret = nullptr;
   if (v.getTag() == JSON_ARRAY) {
     for(auto ae:v) {
       if (ae->value.getTag() == JSON_OBJECT) {
         for(auto f:ae->value) {
-          if (strcmp(f->key, "name") == 0 && f->value.getTag() == JSON_STRING) {
+          if (strcmp(f->key, entityName) == 0 && f->value.getTag() == JSON_STRING) {
             ret = new String(f->value.toString());
             ret->replace("Ü", "Ue");
             const int ind = ret->indexOf('_');
             if (ind > -1) {
               ret->remove(ind);
             }
-          } else if (strcmp(f->key, "orgname") == 0) {
+          } else if (strcmp(f->key, String(String("org") + entityName).c_str()) == 0) {
             changed = true;
           }
         }
       }
     }
+  }
+  return ret;
+}
+
+bool updateTimeUnits(String payload) {
+  bool ret = false;
+  char *source = payload.begin();
+  char *endptr;
+  JsonValue value;
+  JsonAllocator allocator;
+  int status = jsonParse(source, &endptr, &value, allocator);
+  if (status == JSON_OK) {
+    uint16_t startTime = UINT16_MAX, endTime = UINT16_MAX;
+    uint8_t offset = 1;
+    if (value.getTag() == JSON_OBJECT) {
+      for(auto r:value) {
+        if (strcmp(r->key, "result") == 0 && r->value.getTag() == JSON_ARRAY) {
+          uint8_t dayCount = 0;
+          for(auto v:r->value) {
+            if (v->value.getTag() == JSON_OBJECT) {
+              if (dayCount == 0) {
+                // assuming that all other days have the same period times
+                for(auto p:v->value) {
+                  if (strcmp(p->key, "timeUnits") == 0 && p->value.getTag() == JSON_ARRAY) {
+                    uint16_t lastEndTime = UINT16_MAX;
+                    for(auto t:p->value) {
+                      if (t->value.getTag() == JSON_OBJECT) {
+                        for(auto l:t->value) {
+                          if (strcmp(l->key, "startTime") == 0 && l->value.getTag() == JSON_NUMBER) {
+                            startTime = l->value.toNumber();
+                          } else if (strcmp(l->key, "endTime") == 0 && l->value.getTag() == JSON_NUMBER) {
+                            endTime = l->value.toNumber();
+                          }
+                        }
+                      }
+                      if (startTime < UINT16_MAX && endTime < UINT16_MAX) {
+                        if (lastEndTime < UINT16_MAX && lastEndTime + 5 < startTime) {
+                          // break with more than 5 minutes duration
+                          offset++;
+                        }
+                        TTRowHeaderCell period = {startTime, endTime, offset};
+                        timeTable.periods->push_back(period);
+                        offset += 2;
+                        lastEndTime = endTime;
+                        ret = true;
+                      }
+                    }
+                  }
+                }
+              }
+              dayCount++;
+            }
+          }
+          if (timeTable.maxDays == 0) {
+            timeTable.maxDays = dayCount;
+          }
+        }
+      }
+    }
+  } else {
+    DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+    return false;
   }
   return ret;
 }
@@ -371,19 +441,27 @@ bool updateTimeTable(String payload) {
   int status = jsonParse(source, &endptr, &value, allocator);
   if (status == JSON_OK) {
     uint8_t cDay, cPeriod;
-    String *periodName, *teacherName, *roomName;
+    String *periodName, *teacherName, *teacherLastname, *roomName;
     bool periodChanged, teacherChanged, roomChanged;
     if (value.getTag() == JSON_OBJECT) {
       for(auto r:value) {
         if (strcmp(r->key, "result") == 0 && r->value.getTag() == JSON_ARRAY) {
           for(auto v:r->value) {
             if (v->value.getTag() == JSON_OBJECT) {
-              cDay = NUM_DAYS;
-              cPeriod = NUM_PERIODS;
-              periodName = teacherName = roomName = nullptr;
+              cDay = UINT8_MAX;
+              cPeriod = UINT8_MAX;
+              periodName = teacherName = teacherLastname = roomName = nullptr;
               periodChanged = teacherChanged = roomChanged = false;
+              bool irregular = false;
               for(auto p:v->value) {
-                if (strcmp(p->key, "date") == 0 && p->value.getTag() == JSON_NUMBER) {
+                if (strcmp(p->key, "code") == 0 && p->value.getTag() == JSON_STRING) {
+                  if (strcmp(p->value.toString(), "cancelled") == 0) {
+                    cPeriod = UINT8_MAX;
+                    break;
+                  } else if (strcmp(p->value.toString(), "irregular") == 0) {
+                    irregular = true;
+                  }
+                } else if (strcmp(p->key, "date") == 0 && p->value.getTag() == JSON_NUMBER) {
                   cDay = ((uint32_t)p->value.toNumber() - currentMonday);
                 } else if (strcmp(p->key, "startTime") == 0 && p->value.getTag() == JSON_NUMBER) {
                   cPeriod = getPeriodNumberForStartTime(p->value.toNumber());
@@ -391,18 +469,32 @@ bool updateTimeTable(String payload) {
                   periodName = getEntity(p->value, periodChanged);
                 } else if (strcmp(p->key, "te") == 0) {
                   teacherName = getEntity(p->value, teacherChanged);
+                  teacherLastname = getEntity(p->value, teacherChanged);
                 } else if (strcmp(p->key, "ro") == 0) {
                   roomName = getEntity(p->value, roomChanged);
                 }
               }
-              if (cDay < NUM_DAYS && cPeriod < NUM_PERIODS) {
-                if (periodName)
-                  periodName->toCharArray(timeTable.lessonGrid[cDay][cPeriod].name, 4);
-                if (teacherName)
-                  teacherName->toCharArray(timeTable.lessonGrid[cDay][cPeriod].teacher, 5);
-                if (roomName)
-                  roomName->toCharArray(timeTable.lessonGrid[cDay][cPeriod].room, 11);
-                ret = (periodName || teacherName || roomName);
+              if (cDay < UINT8_MAX && cPeriod < UINT8_MAX) {
+                TTLesson newLesson;
+                newLesson.dayLesson = (cDay << 4) ^ cPeriod;
+                if (irregular) {
+                  String("---").toCharArray(newLesson.name, 4);
+                  String("EVENT").toCharArray(newLesson.room, 11);
+                } else {
+                  if (periodName)
+                    periodName->toCharArray(newLesson.name, 4);
+                  if (teacherName)
+                    teacherName->toCharArray(newLesson.teacher, 5);
+                  if (teacherLastname)
+                    teacherLastname->toCharArray(newLesson.teacherName, 32);
+                  if (roomName)
+                    roomName->toCharArray(newLesson.room, 11);
+                }
+                if (cPeriod+1 > timeTable.maxPeriods) {
+                  timeTable.maxPeriods = cPeriod+1;
+                }
+                timeTable.lessonGrid->push_back(newLesson);
+                ret = true;
               }
             }
           }
@@ -469,7 +561,7 @@ void setup() {
 
     // get current time table for the week via WebUntis JSON RPC API
     if (webUntisLogin(*client)) {
-      updateDisplay |= updateTimeTable(webUntisTimetable(*client));
+      updateDisplay |= updateTimeUnits(webUntisTimegrid(*client)) && updateTimeTable(webUntisTimetable(*client));
       webUntisLogout(*client);
     }
   
@@ -487,7 +579,7 @@ void setup() {
     display.firstPage();
     do {
       display.fillScreen(GxEPD_WHITE);
-      drawTable();
+      drawView1();
     } while (display.nextPage());
 
     display.powerOff();
