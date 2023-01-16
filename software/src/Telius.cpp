@@ -27,9 +27,6 @@
 #define DEBUG_PRINTLN(m) Serial.println(m)
 #define DEBUG_PRINT(m) Serial.print(m)
 
-#define DEBUG_PRINTLNC(m) Serial.println("[Core " + String(xPortGetCoreID()) + "]" + m)
-#define DEBUG_PRINTC(m) Serial.print("[Core " + String(xPortGetCoreID()) + "]" + m)
-
 #else
 #define DEBUG_PRINTLN(m)
 #define DEBUG_PRINT(m)
@@ -231,14 +228,13 @@ void drawView1() {
   }
 }
 
-
 SessionData *currentSession = nullptr;
 
 bool webUntisLogin(WiFiClientSecure &client) {
   const String school = preferences.getString("WU_SCHOOL");
   const String user = preferences.getString("WU_USER");
   const String pass = preferences.getString("WU_PASS");
-  DEBUG_PRINTLN("Loaded WebUntis school: " + school + ", user: " + user + ", pass: " + pass);
+  //DEBUG_PRINTLN("Loaded WebUntis school: " + school + ", user: " + user + ", pass: " + pass);
 
   if (https.begin(client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
     int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"authenticate\",\"params\":{\"user\":\""
@@ -532,7 +528,7 @@ void setup() {
 #endif
   const String wifissid = preferences.getString("WL_SSID");
   const String wifipass = preferences.getString("WL_PASS");
-  DEBUG_PRINTLN("Loaded SSID: " + wifissid + ", PASS: " + wifipass);
+  //DEBUG_PRINTLN("Loaded SSID: " + wifissid + ", PASS: " + wifipass);
   
   // Connect to Wi-Fi network with SSID and password
   DEBUG_PRINTLN("Connecting to " + wifissid);
