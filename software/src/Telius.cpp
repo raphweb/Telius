@@ -43,7 +43,7 @@ char currMonday[9] = "";
 char nextFriday[9] = "";
 uint32_t currentMonday = 0; // used to store the date of the monday of the current week in YYYYmmdd
 uint64_t secondsTillNextWakeup = 0;
-#define WAKEUP_HOUR 5
+#define WAKEUP_HOUR 6
 
 // This is lets-encrypt-r3.pem, the intermediate Certificate Authority that
 // signed the server certifcate for the WebUntis server https://ajax.webuntis.com
@@ -120,7 +120,7 @@ void setClock() {
   time_t wTimeSecs = nowSecs + secondsTillNextWakeup;
   struct tm wTime;
   localtime_r(&wTimeSecs, &wTime);
-  // the wakeup time will drift over time, but will always happen some time between 5 and 6 am
+  // the wakeup time will drift over time, but will always happen some time between WAKEUP_HOUR and WAKEUP_HOUR+1
   DEBUG_PRINT("Next wakeup will be scheduled at: ");
   DEBUG_PRINTLN(asctime(&wTime));
 }
