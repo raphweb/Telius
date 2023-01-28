@@ -2,10 +2,11 @@
 
 #include <Preferences.h>
 #include <GxEPD2_7C.h>
-#include <Fonts/FreeSans12pt7b.h>
-#include <Fonts/FreeSans9pt7b.h>
+#include <U8g2_for_Adafruit_GFX.h>
+#include <u8g2_fonts.h>
 #include <WiFi.h>
 #include "esp_wpa2.h"
+#include "time.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <gason.h>
@@ -35,7 +36,24 @@
 #define DEBUG_PRINTC(m)
 #endif
 
-
+enum AlignmentKind {
+  LEFT          = 1,
+  CENTER        = 2,
+  RIGHT         = 4,
+  BOTTOM        = 8,
+  MIDDLE        = 16,
+  TOP           = 32,
+  BOTTOM_LEFT   = BOTTOM | LEFT,
+  MIDDLE_LEFT   = MIDDLE | LEFT,
+  TOP_LEFT      = TOP    | LEFT,
+  BOTTOM_CENTER = BOTTOM | CENTER,
+  MIDDLE_CENTER = MIDDLE | CENTER,
+  TOP_CENTER    = TOP    | CENTER,
+  BOTTOM_RIGHT  = BOTTOM | RIGHT,
+  MIDDLE_RIGHT  = MIDDLE | RIGHT,
+  TOP_RIGHT     = TOP    | RIGHT
+};
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
 Preferences preferences;
 HTTPClient https;
 
@@ -81,6 +99,8 @@ const char* rootCACertificate PROGMEM = \
   "nLRbwHOoq7hHwg==\n" \
   "-----END CERTIFICATE-----\n";
 
+void fillDateWeekDays(time_t currentDay);
+
 void setClock() {
   // Europe/Berlin timezone
   // see: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
@@ -114,6 +134,7 @@ void setClock() {
   strftime(currMonday, 9, "%Y%m%d", &nTime);
   DEBUG_PRINTLN(currMonday);
   currentMonday = strtoul(currMonday, NULL, 10);
+  fillDateWeekDays(nTimeSecs);
 
   const uint8_t hoursTillWakeup = (timeinfo.tm_hour < WAKEUP_HOUR) ? WAKEUP_HOUR - timeinfo.tm_hour : 24 + WAKEUP_HOUR - timeinfo.tm_hour;
   secondsTillNextWakeup = 3600 * hoursTillWakeup;
@@ -152,11 +173,11 @@ struct TTLesson {
 
 #define getTimeStrForTime(timeNumber) \
   { \
-    timeNumber / 1000u + '0', \
-    timeNumber / 100u % 10u + '0', \
+    (char)(timeNumber / 1000u + '0'), \
+    (char)(timeNumber / 100u % 10u + '0'), \
     ':', \
-    timeNumber % 100u / 10u + '0', \
-    timeNumber % 10u + '0', \
+    (char)(timeNumber % 100u / 10u + '0'), \
+    (char)(timeNumber % 10u + '0'), \
     0 \
   }
 
@@ -172,12 +193,33 @@ struct TimeTable {
   };
   uint8_t maxDays = 0;
   uint8_t maxPeriods = 0;
+  uint32_t dateWeekDay[5] = {0};
   std::vector<TTRowHeaderCell> *periods = new std::vector<TTRowHeaderCell>();
   std::vector<TTLesson> *lessonGrid = new std::vector<TTLesson>();
   uint32_t lastUpdateDay = 0; // used to store the day of the last update in YYYYmmdd, e.g., 20230113
 };
 
 TimeTable timeTable;
+
+void fillDateWeekDays(const time_t mondayDate) {
+  struct tm nTime;
+  time_t currentDay = mondayDate;
+  for(uint8_t i = 0; i < 5; i++) {
+    currentDay = mondayDate + 86400 * i;
+    localtime_r(&currentDay, &nTime);
+    char currentDayStr[9];
+    strftime(currentDayStr, 9, "%Y%m%d", &nTime);
+    uint32_t currentDayUInt32 = strtoul(currentDayStr, NULL, 10);
+    timeTable.dateWeekDay[i] = currentDayUInt32;
+    DEBUG_PRINTLN("Date " + String(currentDayUInt32) + " is " + String(i) + " day of the week.");
+  }
+}
+
+uint8_t getNumDayOfWeekFromDate(uint32_t date) {
+  for(uint8_t numDay = 0; numDay < 5; numDay++)
+    if (timeTable.dateWeekDay[numDay] == date) return numDay;
+  return 0;
+}
 
 uint8_t getPeriodNumberForStartTime(uint16_t startTime) {
   uint8_t ret = 0;
@@ -188,44 +230,65 @@ uint8_t getPeriodNumberForStartTime(uint16_t startTime) {
   return 0;
 }
 
-const char pauseStr[] = "Pause";
-const uint8_t rowHeight = 30;
+#define pauseStr "Pause"
+#define rowHeight 30
+
+void drawString(int16_t x, int16_t y, const char *text, const AlignmentKind alignment = BOTTOM_LEFT) {
+  const uint16_t w = u8g2Fonts.getUTF8Width(text);
+  const uint16_t h = u8g2Fonts.getFontAscent() - u8g2Fonts.getFontDescent();
+  if (alignment & RIGHT)  x -= w;
+  if (alignment & CENTER) x -= w / 2;
+  if (alignment & MIDDLE) y += h / 2;
+  if (alignment & TOP)    y += h;
+  //display.drawRect(x, y-u8g2Fonts.getFontAscent(), w, h, GxEPD_RED);
+  u8g2Fonts.drawUTF8(x, y, text);
+}
 
 void drawView1() {
-  display.setFont(&FreeSans12pt7b);
-  display.setTextColor(GxEPD_BLACK);
+  display.fillScreen(GxEPD_WHITE);
+  u8g2Fonts.setFont(u8g2_font_helvB18_tf);
   for(uint8_t cDay = 0; cDay < timeTable.maxDays; cDay++) {
     const char dayName[] = {timeTable.days[cDay][0], timeTable.days[cDay][1], 0};
     display.drawFastVLine(79 + cDay*104, 6, display.height() - 12, GxEPD_BLACK);
-    display.setCursor(84 + cDay*104, 31);
-    display.print(dayName);
+    drawString(130 + cDay*104, 33, dayName, BOTTOM_CENTER);
   }
   for(uint8_t cPeriod = 0; cPeriod < timeTable.maxPeriods; cPeriod++) {
     const auto& row = timeTable.periods->at(cPeriod);
     display.drawFastHLine(0, 11 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
-    display.setCursor(6, 33 + rowHeight*row.offset);
     const char time1[] = getTimeStrForTime(row.time1);
-    display.print(time1);
+    drawString(38, 35 + rowHeight*row.offset, time1, BOTTOM_CENTER);
     display.drawFastHLine(15, 10 + rowHeight + rowHeight*row.offset, 40, GxEPD_BLACK);
-    display.setCursor(6, 33 + rowHeight*(row.offset + 1));
     const char time2[] = getTimeStrForTime(row.time2);
-    display.print(time2);
+    drawString(38, 35 + rowHeight*(row.offset + 1), time2, BOTTOM_CENTER);
     display.drawFastHLine(0, 10 + rowHeight*2 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
   }
-  display.setCursor(6, 33 + rowHeight*7);
-  display.print(pauseStr);
+  drawString(38, 35 + rowHeight*7, pauseStr, BOTTOM_CENTER);
   // fill time table
-  display.setFont(&FreeSans9pt7b);
+  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   for(const auto& lesson : *timeTable.lessonGrid) {
-    const uint16_t columnOffset = 84 + UPHA(lesson.dayLesson) *104;
+    const uint16_t columnOffset = 83 + UPHA(lesson.dayLesson)*104;
     const uint8_t rowOffset = timeTable.periods->at(LOHA(lesson.dayLesson)).offset;
-    display.setCursor(columnOffset, 33 + rowHeight*rowOffset);
-    display.print(lesson.name);
-    display.setCursor(columnOffset + 51, 33 + rowHeight*rowOffset);
-    display.print(lesson.teacher);
-    display.setCursor(columnOffset, 33 + rowHeight*(rowOffset+1));
-    display.print(lesson.room);
+    drawString(columnOffset, 34 + rowHeight*rowOffset, lesson.name);
+    drawString(columnOffset + 96, 34 + rowHeight*rowOffset, lesson.teacher, BOTTOM_RIGHT);
+    drawString(columnOffset, 34 + rowHeight*(rowOffset+1), lesson.room);
   }
+}
+
+void fillWithColor(uint16_t color) {
+  display.firstPage();
+  do {
+    display.fillScreen(color);
+  } while (display.nextPage());
+}
+
+void clearAllColors() {
+  fillWithColor(GxEPD_BLACK);
+  fillWithColor(GxEPD_GREEN);
+  fillWithColor(GxEPD_BLUE);
+  fillWithColor(GxEPD_RED);
+  fillWithColor(GxEPD_YELLOW);
+  fillWithColor(GxEPD_ORANGE);
+  delay(1000);
 }
 
 SessionData *currentSession = nullptr;
@@ -351,7 +414,6 @@ String *getEntity(JsonValue &v, bool &changed, const char *entityName = "name") 
         for(auto f:ae->value) {
           if (strcmp(f->key, entityName) == 0 && f->value.getTag() == JSON_STRING) {
             ret = new String(f->value.toString());
-            ret->replace("Ü", "Ue");
             const int ind = ret->indexOf('_');
             if (ind > -1) {
               ret->remove(ind);
@@ -458,7 +520,7 @@ bool updateTimeTable(String payload) {
                     irregular = true;
                   }
                 } else if (strcmp(p->key, "date") == 0 && p->value.getTag() == JSON_NUMBER) {
-                  cDay = ((uint32_t)p->value.toNumber() - currentMonday);
+                  cDay = getNumDayOfWeekFromDate((uint32_t)p->value.toNumber());
                 } else if (strcmp(p->key, "startTime") == 0 && p->value.getTag() == JSON_NUMBER) {
                   cPeriod = getPeriodNumberForStartTime(p->value.toNumber());
                 } else if (strcmp(p->key, "su") == 0) {
@@ -473,7 +535,7 @@ bool updateTimeTable(String payload) {
               if (cDay < UINT8_MAX && cPeriod < UINT8_MAX) {
                 TTLesson newLesson;
                 newLesson.dayLesson = (cDay << 4) ^ cPeriod;
-                if (irregular) {
+                if (irregular && !periodName && !teacherName && !roomName) {
                   String("---").toCharArray(newLesson.name, 4);
                   String("EVENT").toCharArray(newLesson.room, 11);
                 } else {
@@ -532,9 +594,11 @@ void setup() {
   
   // Connect to Wi-Fi network with SSID and password
   DEBUG_PRINTLN("Connecting to " + wifissid);
+  WiFi.disconnect();
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifissid.c_str(), wifipass.c_str());
   WiFi.setHostname(ESP_NAME);
+  WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
     DEBUG_PRINTLN("WiFi connection failed! Code " + WiFi.waitForConnectResult());
@@ -568,13 +632,22 @@ void setup() {
   delay(1000);
 
   if (updateDisplay) {
+    WiFi.disconnect();
+    WiFi.mode(WIFI_OFF);
     // display setup and printing
     display.init(115200, true, 20, false, *(new SPIClass(VSPI)), SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
+    u8g2Fonts.begin(display);
+    u8g2Fonts.setFontMode(1);
+    u8g2Fonts.setFontDirection(0);
+    u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+    u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+
     display.setFullWindow();
+    clearAllColors();
     display.firstPage();
     do {
-      display.fillScreen(GxEPD_WHITE);
       drawView1();
     } while (display.nextPage());
 

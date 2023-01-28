@@ -10,3 +10,6 @@
 [submodule "software/lib/esp32-gason"]
 	path = software/lib/esp32-gason
 	url = https://github.com/raphweb/esp32-gason
+[submodule "software/lib/U8g2_for_Adafruit_GFX"]
+	path = software/lib/U8g2_for_Adafruit_GFX
+	url = https://github.com/raphweb/U8g2_for_Adafruit_GFX
