@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 #include <Preferences.h>
-#include <DisplayConfig.h>
+#include <DisplayConfig.hpp>
 #include <WiFi.h>
 #include "esp_wpa2.h"
 #include "time.h"
