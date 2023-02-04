@@ -1,9 +1,7 @@
 #include <Arduino.h>
 
 #include <Preferences.h>
-#include <GxEPD2_7C.h>
-#include <U8g2_for_Adafruit_GFX.h>
-#include <u8g2_fonts.h>
+#include <DisplayConfig.h>
 #include <WiFi.h>
 #include "esp_wpa2.h"
 #include "time.h"
@@ -12,8 +10,6 @@
 #include <gason.h>
 #include <base64.h>
 #include <vector>
-
-#include "DisplayConfig.h"
 
 #define US_TO_SECONDS_FACTOR 1000000L
 #define SLEEP_DURATION 60 // in seconds
@@ -53,7 +49,7 @@ enum AlignmentKind {
   MIDDLE_RIGHT  = MIDDLE | RIGHT,
   TOP_RIGHT     = TOP    | RIGHT
 };
-U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
 Preferences preferences;
 HTTPClient https;
 
@@ -104,7 +100,8 @@ void fillDateWeekDays(time_t currentDay);
 void setClock() {
   // Europe/Berlin timezone
   // see: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
-  configTzTime("CET-1CEST,M3.5.0,M10.5.0/3", "pool.ntp.org");
+  const String timezone = preferences.getString("TIMEZONE");
+  configTzTime(timezone.c_str(), "pool.ntp.org");
 
   DEBUG_PRINT("Waiting for NTP time sync: ");
   time_t nowSecs = time(nullptr);
@@ -569,27 +566,23 @@ bool updateTimeTable(String payload) {
 void setup() {
   Serial.begin(115200);
   while(!Serial) {}
-  preferences.begin(ESP_NAME);
-
 #ifdef SAVE_CREDENTIALS
   {
-    const String wifissid = "WLAN";
-    const String wifipass = "****";
-    const String webUntisSchool = "school";
-    const String webUntisUser = "USER";
-    const String webUntisPass = "****";
+    preferences.begin(ESP_NAME);
     preferences.clear();
-    preferences.putString("WL_SSID", wifissid);
-    preferences.putString("WL_PASS", wifipass);
-    preferences.putString("WU_SCHOOL", webUntisSchool);
-    preferences.putString("WU_USER", webUntisUser);
-    preferences.putString("WU_PASS", webUntisPass);
+    preferences.putString("WIFI_SSID", "SSID");
+    preferences.putString("WIFI_PASS", "****");
+    preferences.putString("TIMEZONE", "TZ");
+    preferences.putString("WU_SCHOOL", "SCHOOL");
+    preferences.putString("WU_USER", "USER");
+    preferences.putString("WU_PASS", "****");
     preferences.end();
     esp_deep_sleep_start();
   }
 #endif
-  const String wifissid = preferences.getString("WL_SSID");
-  const String wifipass = preferences.getString("WL_PASS");
+  preferences.begin(ESP_NAME, true);
+  const String wifissid = preferences.getString("WIFI_SSID");
+  const String wifipass = preferences.getString("WIFI_PASS");
   //DEBUG_PRINTLN("Loaded SSID: " + wifissid + ", PASS: " + wifipass);
   
   // Connect to Wi-Fi network with SSID and password
@@ -635,16 +628,8 @@ void setup() {
     WiFi.disconnect();
     WiFi.mode(WIFI_OFF);
     // display setup and printing
-    display.init(115200, true, 20, false, *(new SPIClass(VSPI)), SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    initialiseDisplay();
 
-    u8g2Fonts.begin(display);
-    u8g2Fonts.setFontMode(1);
-    u8g2Fonts.setFontDirection(0);
-    u8g2Fonts.setForegroundColor(GxEPD_BLACK);
-    u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
-    u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-
-    display.setFullWindow();
     clearAllColors();
     display.firstPage();
     do {
