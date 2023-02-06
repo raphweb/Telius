@@ -164,8 +164,10 @@ struct TTLesson {
   char teacher[5] = {0};
   char teacherName[32] = {0};
   char room[11] = {0};
-  uint8_t dayLesson = 0;
-  uint8_t changedFlags = 0;
+  // MSB .... LSB
+  // 4 bits start lesson | 4 bits end lesson
+  uint8_t lesson = 0;
+  uint8_t dayAndFlags = 0;
 };
 
 #define getTimeStrForTime(timeNumber) \
@@ -227,6 +229,15 @@ uint8_t getPeriodNumberForStartTime(uint16_t startTime) {
   return 0;
 }
 
+uint8_t getPeriodNumberForEndTime(uint16_t endTime) {
+  uint8_t ret = 0;
+  for(const auto& period : *timeTable.periods) {
+    if (period.time2 == endTime) return ret;
+    ret++;
+  }
+  return 0;
+}
+
 #define pauseStr "Pause"
 #define rowHeight 30
 
@@ -246,28 +257,30 @@ void drawView1() {
   u8g2Fonts.setFont(u8g2_font_helvB18_tf);
   for(uint8_t cDay = 0; cDay < timeTable.maxDays; cDay++) {
     const char dayName[] = {timeTable.days[cDay][0], timeTable.days[cDay][1], 0};
-    display.drawFastVLine(79 + cDay*104, 6, display.height() - 12, GxEPD_BLACK);
+    display.drawFastVLine(79 + cDay*104, 6, 35, GxEPD_BLACK);
     drawString(130 + cDay*104, 33, dayName, BOTTOM_CENTER);
   }
   for(uint8_t cPeriod = 0; cPeriod < timeTable.maxPeriods; cPeriod++) {
     const auto& row = timeTable.periods->at(cPeriod);
-    display.drawFastHLine(0, 11 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
+    display.drawFastHLine(0, 11 + rowHeight*row.offset, 79, GxEPD_BLACK);
     const char time1[] = getTimeStrForTime(row.time1);
     drawString(38, 35 + rowHeight*row.offset, time1, BOTTOM_CENTER);
     display.drawFastHLine(15, 10 + rowHeight + rowHeight*row.offset, 40, GxEPD_BLACK);
     const char time2[] = getTimeStrForTime(row.time2);
     drawString(38, 35 + rowHeight*(row.offset + 1), time2, BOTTOM_CENTER);
-    display.drawFastHLine(0, 10 + rowHeight*2 + rowHeight*row.offset, display.width(), GxEPD_BLACK);
+    display.drawFastHLine(0, 10 + rowHeight*2 + rowHeight*row.offset, 79, GxEPD_BLACK);
   }
   drawString(38, 35 + rowHeight*7, pauseStr, BOTTOM_CENTER);
   // fill time table
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   for(const auto& lesson : *timeTable.lessonGrid) {
-    const uint16_t columnOffset = 83 + UPHA(lesson.dayLesson)*104;
-    const uint8_t rowOffset = timeTable.periods->at(LOHA(lesson.dayLesson)).offset;
-    drawString(columnOffset, 34 + rowHeight*rowOffset, lesson.name);
-    drawString(columnOffset + 96, 34 + rowHeight*rowOffset, lesson.teacher, BOTTOM_RIGHT);
-    drawString(columnOffset, 34 + rowHeight*(rowOffset+1), lesson.room);
+    const uint16_t columnOffset = 79 + UPHA(lesson.dayAndFlags)*104;
+    const uint8_t rowStartOffset = timeTable.periods->at(UPHA(lesson.lesson)).offset;
+    const uint8_t lessonHeight = timeTable.periods->at(LOHA(lesson.lesson)).offset - rowStartOffset + 2;
+    display.drawRect(columnOffset, 11 + rowHeight* rowStartOffset, 105, rowHeight*lessonHeight, GxEPD_BLACK);
+    drawString(columnOffset +   4, 34 + rowHeight* rowStartOffset,    lesson.name);
+    drawString(columnOffset + 100, 34 + rowHeight* rowStartOffset,    lesson.teacher, BOTTOM_RIGHT);
+    drawString(columnOffset +   4, 34 + rowHeight*(rowStartOffset+1), lesson.room);
   }
 }
 
@@ -495,7 +508,7 @@ bool updateTimeTable(String payload) {
   JsonAllocator allocator;
   int status = jsonParse(source, &endptr, &value, allocator);
   if (status == JSON_OK) {
-    uint8_t cDay, cPeriod;
+    uint8_t cDay, cStartPeriod, cEndPeriod;
     String *periodName, *teacherName, *teacherLastname, *roomName;
     bool periodChanged, teacherChanged, roomChanged;
     if (value.getTag() == JSON_OBJECT) {
@@ -504,14 +517,16 @@ bool updateTimeTable(String payload) {
           for(auto v:r->value) {
             if (v->value.getTag() == JSON_OBJECT) {
               cDay = UINT8_MAX;
-              cPeriod = UINT8_MAX;
+              cStartPeriod = UINT8_MAX;
+              cEndPeriod = UINT8_MAX;
               periodName = teacherName = teacherLastname = roomName = nullptr;
               periodChanged = teacherChanged = roomChanged = false;
               bool irregular = false;
               for(auto p:v->value) {
                 if (strcmp(p->key, "code") == 0 && p->value.getTag() == JSON_STRING) {
                   if (strcmp(p->value.toString(), "cancelled") == 0) {
-                    cPeriod = UINT8_MAX;
+                    cStartPeriod = UINT8_MAX;
+                    cEndPeriod = UINT8_MAX;
                     break;
                   } else if (strcmp(p->value.toString(), "irregular") == 0) {
                     irregular = true;
@@ -519,7 +534,9 @@ bool updateTimeTable(String payload) {
                 } else if (strcmp(p->key, "date") == 0 && p->value.getTag() == JSON_NUMBER) {
                   cDay = getNumDayOfWeekFromDate((uint32_t)p->value.toNumber());
                 } else if (strcmp(p->key, "startTime") == 0 && p->value.getTag() == JSON_NUMBER) {
-                  cPeriod = getPeriodNumberForStartTime(p->value.toNumber());
+                  cStartPeriod = getPeriodNumberForStartTime(p->value.toNumber());
+                } else if (strcmp(p->key, "endTime") == 0 && p->value.getTag() == JSON_NUMBER) {
+                  cEndPeriod = getPeriodNumberForEndTime(p->value.toNumber());
                 } else if (strcmp(p->key, "su") == 0) {
                   periodName = getEntity(p->value, periodChanged);
                 } else if (strcmp(p->key, "te") == 0) {
@@ -529,9 +546,10 @@ bool updateTimeTable(String payload) {
                   roomName = getEntity(p->value, roomChanged);
                 }
               }
-              if (cDay < UINT8_MAX && cPeriod < UINT8_MAX) {
+              if (cDay < UINT8_MAX && cStartPeriod < UINT8_MAX && cEndPeriod < UINT8_MAX) {
                 TTLesson newLesson;
-                newLesson.dayLesson = (cDay << 4) ^ cPeriod;
+                newLesson.lesson = (cStartPeriod << 4) ^ cEndPeriod;
+                newLesson.dayAndFlags = (cDay << 4) ^ periodChanged << 2 ^ teacherChanged << 1 ^ roomChanged;
                 if (irregular && !periodName && !teacherName && !roomName) {
                   String("---").toCharArray(newLesson.name, 4);
                   String("EVENT").toCharArray(newLesson.room, 11);
@@ -545,8 +563,8 @@ bool updateTimeTable(String payload) {
                   if (roomName)
                     roomName->toCharArray(newLesson.room, 11);
                 }
-                if (cPeriod+1 > timeTable.maxPeriods) {
-                  timeTable.maxPeriods = cPeriod+1;
+                if (cEndPeriod+1 > timeTable.maxPeriods) {
+                  timeTable.maxPeriods = cEndPeriod+1;
                 }
                 timeTable.lessonGrid->push_back(newLesson);
                 ret = true;
@@ -599,7 +617,7 @@ void setup() {
     ESP.restart();
   }
   setClock();
-  // Print local IP address and start web server
+  // Print local IP
   DEBUG_PRINTLN("WiFi connected.");
   DEBUG_PRINT("IP address: ");
   DEBUG_PRINTLN(WiFi.localIP());
@@ -654,6 +672,4 @@ void setup() {
   esp_deep_sleep_start();
 }
 
-void loop() {
-  // never executed when using deep sleep
-}
+void loop() {}
