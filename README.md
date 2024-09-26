@@ -16,7 +16,7 @@ These instructions will get you a copy of the project (including submodules) up 
 
 1. Clone the repo
    ```sh
-   git clone https://github.com/raphweb/Telius --recurse-submodules
+   git clone https://github.com/raphweb/Telius
    ```
 1. Open Vs Code
 1. Open Platform IO and add Project
