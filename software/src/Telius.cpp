@@ -15,7 +15,6 @@
 #define SLEEP_DURATION 60 // in seconds
 
 #define ESP_NAME "telius"
-//#define SAVE_CREDENTIALS
 
 /**************************** DEBUG *******************************/
 #define DEBUG
@@ -59,40 +58,39 @@ uint32_t currentMonday = 0; // used to store the date of the monday of the curre
 uint64_t secondsTillNextWakeup = 0;
 #define WAKEUP_HOUR 6
 
-// This is lets-encrypt-r3.pem, the intermediate Certificate Authority that
-// signed the server certifcate for the WebUntis server https://ajax.webuntis.com
-// used here. This certificate is valid until Sep 15 16:00:00 2025 GMT
+// This is lets-encrypt-r11.pem, the intermediate Certificate Authority that
+// signed the server certifcate for the WebUntis server https://webuntis.com
+// used here. This certificate is valid until 2027-03-12
 // See: https://letsencrypt.org/certificates/
 const char* rootCACertificate PROGMEM = \
   "-----BEGIN CERTIFICATE-----\n" \
-  "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\n" \
+  "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\n" \
-  "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\n" \
-  "nLRbwHOoq7hHwg==\n" \
+  "cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMjQwMzEzMDAwMDAw\n" \
+  "WhcNMjcwMzEyMjM1OTU5WjAzMQswCQYDVQQGEwJVUzEWMBQGA1UEChMNTGV0J3Mg\n" \
+  "RW5jcnlwdDEMMAoGA1UEAxMDUjExMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB\n" \
+  "CgKCAQEAuoe8XBsAOcvKCs3UZxD5ATylTqVhyybKUvsVAbe5KPUoHu0nsyQYOWcJ\n" \
+  "DAjs4DqwO3cOvfPlOVRBDE6uQdaZdN5R2+97/1i9qLcT9t4x1fJyyXJqC4N0lZxG\n" \
+  "AGQUmfOx2SLZzaiSqhwmej/+71gFewiVgdtxD4774zEJuwm+UE1fj5F2PVqdnoPy\n" \
+  "6cRms+EGZkNIGIBloDcYmpuEMpexsr3E+BUAnSeI++JjF5ZsmydnS8TbKF5pwnnw\n" \
+  "SVzgJFDhxLyhBax7QG0AtMJBP6dYuC/FXJuluwme8f7rsIU5/agK70XEeOtlKsLP\n" \
+  "Xzze41xNG/cLJyuqC0J3U095ah2H2QIDAQABo4H4MIH1MA4GA1UdDwEB/wQEAwIB\n" \
+  "hjAdBgNVHSUEFjAUBggrBgEFBQcDAgYIKwYBBQUHAwEwEgYDVR0TAQH/BAgwBgEB\n" \
+  "/wIBADAdBgNVHQ4EFgQUxc9GpOr0w8B6bJXELbBeki8m47kwHwYDVR0jBBgwFoAU\n" \
+  "ebRZ5nu25eQBc4AIiMgaWPbpm24wMgYIKwYBBQUHAQEEJjAkMCIGCCsGAQUFBzAC\n" \
+  "hhZodHRwOi8veDEuaS5sZW5jci5vcmcvMBMGA1UdIAQMMAowCAYGZ4EMAQIBMCcG\n" \
+  "A1UdHwQgMB4wHKAaoBiGFmh0dHA6Ly94MS5jLmxlbmNyLm9yZy8wDQYJKoZIhvcN\n" \
+  "AQELBQADggIBAE7iiV0KAxyQOND1H/lxXPjDj7I3iHpvsCUf7b632IYGjukJhM1y\n" \
+  "v4Hz/MrPU0jtvfZpQtSlET41yBOykh0FX+ou1Nj4ScOt9ZmWnO8m2OG0JAtIIE38\n" \
+  "01S0qcYhyOE2G/93ZCkXufBL713qzXnQv5C/viOykNpKqUgxdKlEC+Hi9i2DcaR1\n" \
+  "e9KUwQUZRhy5j/PEdEglKg3l9dtD4tuTm7kZtB8v32oOjzHTYw+7KdzdZiw/sBtn\n" \
+  "UfhBPORNuay4pJxmY/WrhSMdzFO2q3Gu3MUBcdo27goYKjL9CTF8j/Zz55yctUoV\n" \
+  "aneCWs/ajUX+HypkBTA+c8LGDLnWO2NKq0YD/pnARkAnYGPfUDoHR9gVSp/qRx+Z\n" \
+  "WghiDLZsMwhN1zjtSC0uBWiugF3vTNzYIEFfaPG7Ws3jDrAMMYebQ95JQ+HIBD/R\n" \
+  "PBuHRTBpqKlyDnkSHDHYPiNX3adPoPAcgdF3H2/W0rmoswMWgTlLn1Wu0mrks7/q\n" \
+  "pdWfS6PJ1jty80r2VKsM/Dj3YIDfbjXKdaFU5C+8bhfJGqU3taKauuz0wHVGT3eo\n" \
+  "6FlWkWYtbt4pgdamlwVeZEW+LM7qZEJEsMNPrfC03APKmZsJgpWCDWOKZvkZcvjV\n" \
+  "uYkQ4omYCTX5ohy+knMjdOmdH9c7SpqEWBDC86fiNex+O0XOMEZSa8DA\n" \
   "-----END CERTIFICATE-----\n";
 
 void fillDateWeekDays(time_t currentDay);
@@ -156,17 +154,22 @@ struct SessionData {
 struct TTRowHeaderCell {
   const uint16_t time1;
   const uint16_t time2;
-  const uint8_t offset;
+  const uint16_t offset;
 };
 
 struct TTLesson {
-  char name[4] = {0};
-  char teacher[5] = {0};
-  char teacherName[32] = {0};
-  char room[11] = {0};
+  String name;
+  String teacher;
+  String teacherName;
+  String room;
   // MSB .... LSB
   // 4 bits start lesson | 4 bits end lesson
   uint8_t lesson = 0;
+  // 4 bits day | 4 bits flags:
+  //                3: homework
+  //                2: period changed
+  //                1: teacher changed
+  //                0: room changed
   uint8_t dayAndFlags = 0;
 };
 
@@ -181,7 +184,7 @@ struct TTLesson {
   }
 
 struct TimeTable {
-  const char days[7][11] = {
+  const String days[7] = {
     "Montag",
     "Dienstag",
     "Mittwoch",
@@ -199,6 +202,35 @@ struct TimeTable {
 };
 
 TimeTable timeTable;
+
+struct Homework {
+  const uint16_t id;
+  String text;
+  String teacher;
+  uint16_t teacher_id;
+  String subject;
+  uint16_t subject_id;
+  uint8_t day;
+};
+
+bool checkAndMergeExistingLesson(TTLesson &newLesson) {
+  for(auto &exLesson:*timeTable.lessonGrid) {
+    if (exLesson.name == newLesson.name &&
+        exLesson.teacher == newLesson.teacher &&
+        exLesson.room == newLesson.room &&
+        exLesson.dayAndFlags == newLesson.dayAndFlags) {
+      if (timeTable.periods->at(LOHA(exLesson.lesson)).time2 == timeTable.periods->at(UPHA(newLesson.lesson)).time1) {
+        exLesson.lesson = (exLesson.lesson & 0xF0) ^ (newLesson.lesson & 0x0F);
+      } else if (timeTable.periods->at(UPHA(exLesson.lesson)).time1 == timeTable.periods->at(LOHA(newLesson.lesson)).time2) {
+        exLesson.lesson = (exLesson.lesson & 0x0F) ^ (newLesson.lesson & 0xF0);
+      }
+      //DEBUG_PRINTLN(String("  Start of (ex, new): ") + String(LOHA(exLesson.lesson)) + ", " + String(LOHA(newLesson.lesson)));
+      //DEBUG_PRINTLN(String("  End   of (ex, new): ") + String(UPHA(exLesson.lesson)) + ", " + String(LOHA(newLesson.lesson)));
+      return true;
+    }
+  }
+  return false;
+}
 
 void fillDateWeekDays(const time_t mondayDate) {
   struct tm nTime;
@@ -238,49 +270,60 @@ uint8_t getPeriodNumberForEndTime(uint16_t endTime) {
   return 0;
 }
 
-#define pauseStr "Pause"
-#define rowHeight 30
+#define rowHeight 34
+#define coluWidth 144
 
-void drawString(int16_t x, int16_t y, const char *text, const AlignmentKind alignment = BOTTOM_LEFT) {
-  const uint16_t w = u8g2Fonts.getUTF8Width(text);
+const uint16_t emphBG = GxEPD_ORANGE;
+const String hwIcon = "H";
+
+void drawString(int16_t x, int16_t y, const String &text, const AlignmentKind alignment = BOTTOM_LEFT, const bool emph = false) {
+  const uint16_t w = u8g2Fonts.getUTF8Width(text.c_str());
   const uint16_t h = u8g2Fonts.getFontAscent() - u8g2Fonts.getFontDescent();
   if (alignment & RIGHT)  x -= w;
   if (alignment & CENTER) x -= w / 2;
   if (alignment & MIDDLE) y += h / 2;
   if (alignment & TOP)    y += h;
-  //display.drawRect(x, y-u8g2Fonts.getFontAscent(), w, h, GxEPD_RED);
-  u8g2Fonts.drawUTF8(x, y, text);
+  if (emph) {
+    display.fillRect(x, y-u8g2Fonts.getFontAscent(), w, h, emphBG);
+  }
+  u8g2Fonts.drawUTF8(x, y, text.c_str());
 }
 
 void drawView1() {
   display.fillScreen(GxEPD_WHITE);
   u8g2Fonts.setFont(u8g2_font_helvB18_tf);
+  u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
   for(uint8_t cDay = 0; cDay < timeTable.maxDays; cDay++) {
-    const char dayName[] = {timeTable.days[cDay][0], timeTable.days[cDay][1], 0};
-    display.drawFastVLine(79 + cDay*104, 6, 35, GxEPD_BLACK);
-    drawString(130 + cDay*104, 33, dayName, BOTTOM_CENTER);
+    display.drawFastVLine(79 + cDay*coluWidth, 6, 35, GxEPD_BLACK);
+    drawString(79 + coluWidth/2 + cDay*coluWidth, 33, timeTable.days[cDay], BOTTOM_CENTER);
   }
   for(uint8_t cPeriod = 0; cPeriod < timeTable.maxPeriods; cPeriod++) {
     const auto& row = timeTable.periods->at(cPeriod);
-    display.drawFastHLine(0, 11 + rowHeight*row.offset, 79, GxEPD_BLACK);
+    display.drawFastHLine(0, 10 + row.offset, 79, GxEPD_BLACK);
     const char time1[] = getTimeStrForTime(row.time1);
-    drawString(38, 35 + rowHeight*row.offset, time1, BOTTOM_CENTER);
-    display.drawFastHLine(15, 10 + rowHeight + rowHeight*row.offset, 40, GxEPD_BLACK);
+    drawString(38, 35 + row.offset, time1, BOTTOM_CENTER);
+    display.drawFastHLine(15, 10 + rowHeight + row.offset, 40, GxEPD_BLACK);
     const char time2[] = getTimeStrForTime(row.time2);
-    drawString(38, 35 + rowHeight*(row.offset + 1), time2, BOTTOM_CENTER);
-    display.drawFastHLine(0, 10 + rowHeight*2 + rowHeight*row.offset, 79, GxEPD_BLACK);
+    drawString(38, 35 + row.offset + rowHeight, time2, BOTTOM_CENTER);
+    display.drawFastHLine(0, 10 + rowHeight*2 + row.offset, 79, GxEPD_BLACK);
   }
-  drawString(38, 35 + rowHeight*7, pauseStr, BOTTOM_CENTER);
   // fill time table
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   for(const auto& lesson : *timeTable.lessonGrid) {
-    const uint16_t columnOffset = 79 + UPHA(lesson.dayAndFlags)*104;
-    const uint8_t rowStartOffset = timeTable.periods->at(UPHA(lesson.lesson)).offset;
-    const uint8_t lessonHeight = timeTable.periods->at(LOHA(lesson.lesson)).offset - rowStartOffset + 2;
-    display.drawRect(columnOffset, 11 + rowHeight* rowStartOffset, 105, rowHeight*lessonHeight, GxEPD_BLACK);
-    drawString(columnOffset +   4, 34 + rowHeight* rowStartOffset,    lesson.name);
-    drawString(columnOffset + 100, 34 + rowHeight* rowStartOffset,    lesson.teacher, BOTTOM_RIGHT);
-    drawString(columnOffset +   4, 34 + rowHeight*(rowStartOffset+1), lesson.room);
+    const uint16_t columnOffset = 79 + UPHA(lesson.dayAndFlags)*coluWidth;
+    const uint16_t rowStartOffset = timeTable.periods->at(UPHA(lesson.lesson)).offset;
+    const uint16_t lessonHeight = timeTable.periods->at(LOHA(lesson.lesson)).offset - rowStartOffset + 2*rowHeight;
+    display.fillRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, (lesson.dayAndFlags&7) == 7 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    display.drawRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, GxEPD_BLACK);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&4) == 4 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    drawString(columnOffset +             4, 34 + rowStartOffset,    lesson.name, BOTTOM_LEFT, (lesson.dayAndFlags&4) == 4);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&1) == 1 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    drawString(columnOffset + coluWidth - 4, 34 + rowStartOffset,    lesson.room, BOTTOM_RIGHT, (lesson.dayAndFlags&1) == 1);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&2) == 2 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    drawString(columnOffset +             4, 34 + rowStartOffset + rowHeight, lesson.teacherName, BOTTOM_LEFT, (lesson.dayAndFlags&2) == 2);
+    if (lesson.dayAndFlags&8) {
+      drawString(columnOffset + coluWidth - 4, 34 + rowStartOffset + rowHeight, hwIcon, BOTTOM_RIGHT, false);
+    }
   }
 }
 
@@ -292,12 +335,12 @@ void fillWithColor(uint16_t color) {
 }
 
 void clearAllColors() {
-  fillWithColor(GxEPD_BLACK);
+  /*fillWithColor(GxEPD_BLACK);
   fillWithColor(GxEPD_GREEN);
   fillWithColor(GxEPD_BLUE);
   fillWithColor(GxEPD_RED);
   fillWithColor(GxEPD_YELLOW);
-  fillWithColor(GxEPD_ORANGE);
+  fillWithColor(GxEPD_ORANGE);*/
   delay(1000);
 }
 
@@ -305,11 +348,12 @@ SessionData *currentSession = nullptr;
 
 bool webUntisLogin(WiFiClientSecure &client) {
   const String school = preferences.getString("WU_SCHOOL");
+  const String subdom = preferences.getString("WU_SUBDOM");
   const String user = preferences.getString("WU_USER");
   const String pass = preferences.getString("WU_PASS");
   //DEBUG_PRINTLN("Loaded WebUntis school: " + school + ", user: " + user + ", pass: " + pass);
 
-  if (https.begin(client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
+  if (https.begin(client, "https://" + subdom + ".webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
     int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"authenticate\",\"params\":{\"user\":\""
         + user + "\",\"password\":\"" + pass + "\",\"client\":\"" + String(ESP_NAME) + "243\"},\"jsonrpc\":\"2.0\"}");
 
@@ -361,6 +405,7 @@ bool webUntisLogin(WiFiClientSecure &client) {
           https.end();
           return false;
         }
+        allocator.deallocate();
       }
     } else {
       DEBUG_PRINTLN("[HTTPS] authenticate... failed, error: " + https.errorToString(httpCode));
@@ -375,7 +420,8 @@ bool webUntisLogin(WiFiClientSecure &client) {
 String webUntisRequest(WiFiClientSecure &client, String method, String params = "") {
   if (currentSession) {
     const String school = preferences.getString("WU_SCHOOL");
-    if (https.begin(client, "https://ajax.webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
+    const String subdom = preferences.getString("WU_SUBDOM");
+    if (https.begin(client, "https://" + subdom + ".webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
       https.addHeader("Cookie", currentSession->sessionCookie);
       int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"" + method + "\",\"params\":{" + params + "},\"jsonrpc\":\"2.0\"}");
       if (httpCode > 0) {
@@ -383,13 +429,37 @@ String webUntisRequest(WiFiClientSecure &client, String method, String params = 
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
           String payload = https.getString();
           DEBUG_PRINTLN(payload);
+          https.end();
           return payload;
         }
       } else {
         DEBUG_PRINTLN("[HTTPS] POST " + method + "... failed, error: " + https.errorToString(httpCode));
       }
+      https.end();
     }
-    https.end();
+  }
+  return "";
+}
+
+String webUntisGetHomework(WiFiClientSecure &client) {
+  if (currentSession) {
+    const String subdom = preferences.getString("WU_SUBDOM");
+    if (https.begin(client, "https://" + subdom + ".webuntis.com/WebUntis/api/homeworks/lessons?startDate=" + currMonday + "&endDate=" + nextFriday)) {
+      https.addHeader("Cookie", currentSession->sessionCookie);
+      int httpCode = https.GET();
+      if (httpCode > 0) {
+        DEBUG_PRINTLN("[HTTPS] GET homework... code: " + httpCode);
+        if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          String payload = https.getString();
+          DEBUG_PRINTLN(payload);
+          https.end();
+          return payload;
+        }
+      } else {
+        DEBUG_PRINTLN("[HTTPS] GET homework... failed, error: " + https.errorToString(httpCode));
+      }
+      https.end();
+    }
   }
   return "";
 }
@@ -398,14 +468,10 @@ String webUntisTimegrid(WiFiClientSecure &client) {
   return webUntisRequest(client, "getTimegridUnits");
 }
 
-String webUntisTeachers(WiFiClientSecure &client) {
-  return webUntisRequest(client, "getTeachers");
-}
-
 String webUntisTimetable(WiFiClientSecure &client) {
   if (currentSession) {
     return webUntisRequest(client, "getTimetable", "\"options\":{\"element\":{\"id\":\"" + String(currentSession->personId) + "\",\"type\":" +
-      String(currentSession->personType) + "},\"startDate\":" + currMonday + ",\"endDate\":" + nextFriday + ",\"klasseFields\":[\"name\"]," +
+      String(currentSession->personType) + "},\"startDate\":" + currMonday + ",\"endDate\":" + nextFriday + ",\"showLsText\":true,\"klasseFields\":[\"name\"]," +
       "\"teacherFields\":[\"name\",\"longname\"],\"subjectFields\":[\"name\"],\"roomFields\":[\"name\"]}");
   }
   return "";
@@ -438,16 +504,15 @@ String *getEntity(JsonValue &v, bool &changed, const char *entityName = "name") 
   return ret;
 }
 
-bool updateTimeUnits(String payload) {
+bool updateTimeUnits(char *source) {
   bool ret = false;
-  char *source = payload.begin();
   char *endptr;
   JsonValue value;
   JsonAllocator allocator;
   int status = jsonParse(source, &endptr, &value, allocator);
   if (status == JSON_OK) {
     uint16_t startTime = UINT16_MAX, endTime = UINT16_MAX;
-    uint8_t offset = 1;
+    uint16_t offset = rowHeight;
     if (value.getTag() == JSON_OBJECT) {
       for(auto r:value) {
         if (strcmp(r->key, "result") == 0 && r->value.getTag() == JSON_ARRAY) {
@@ -472,11 +537,11 @@ bool updateTimeUnits(String payload) {
                       if (startTime < UINT16_MAX && endTime < UINT16_MAX) {
                         if (lastEndTime < UINT16_MAX && lastEndTime + 5 < startTime) {
                           // break with more than 5 minutes duration
-                          offset++;
+                          offset += rowHeight/3;
                         }
                         TTRowHeaderCell period = {startTime, endTime, offset};
                         timeTable.periods->push_back(period);
-                        offset += 2;
+                        offset += 2 * rowHeight;
                         lastEndTime = endTime;
                         ret = true;
                       }
@@ -497,19 +562,19 @@ bool updateTimeUnits(String payload) {
     DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
     return false;
   }
+  allocator.deallocate();
   return ret;
 }
 
-bool updateTimeTable(String payload) {
+bool updateTimeTable(char *source) {
   bool ret = false;
-  char *source = payload.begin();
   char *endptr;
   JsonValue value;
   JsonAllocator allocator;
   int status = jsonParse(source, &endptr, &value, allocator);
   if (status == JSON_OK) {
     uint8_t cDay, cStartPeriod, cEndPeriod;
-    String *periodName, *teacherName, *teacherLastname, *roomName;
+    String *periodName, *teacherName, *teacherLastname, *roomName, *lstext;
     bool periodChanged, teacherChanged, roomChanged;
     if (value.getTag() == JSON_OBJECT) {
       for(auto r:value) {
@@ -519,7 +584,7 @@ bool updateTimeTable(String payload) {
               cDay = UINT8_MAX;
               cStartPeriod = UINT8_MAX;
               cEndPeriod = UINT8_MAX;
-              periodName = teacherName = teacherLastname = roomName = nullptr;
+              periodName = teacherName = teacherLastname = roomName = lstext = nullptr;
               periodChanged = teacherChanged = roomChanged = false;
               bool irregular = false;
               for(auto p:v->value) {
@@ -541,32 +606,46 @@ bool updateTimeTable(String payload) {
                   periodName = getEntity(p->value, periodChanged);
                 } else if (strcmp(p->key, "te") == 0) {
                   teacherName = getEntity(p->value, teacherChanged);
-                  teacherLastname = getEntity(p->value, teacherChanged);
+                  teacherLastname = getEntity(p->value, teacherChanged, "longname");
                 } else if (strcmp(p->key, "ro") == 0) {
                   roomName = getEntity(p->value, roomChanged);
+                } else if (strcmp(p->key, "lstext") == 0 && p->value.getTag() == JSON_STRING) {
+                  lstext = new String(p->value.toString());
                 }
               }
               if (cDay < UINT8_MAX && cStartPeriod < UINT8_MAX && cEndPeriod < UINT8_MAX) {
                 TTLesson newLesson;
                 newLesson.lesson = (cStartPeriod << 4) ^ cEndPeriod;
                 newLesson.dayAndFlags = (cDay << 4) ^ periodChanged << 2 ^ teacherChanged << 1 ^ roomChanged;
-                if (irregular && !periodName && !teacherName && !roomName) {
-                  String("---").toCharArray(newLesson.name, 4);
-                  String("EVENT").toCharArray(newLesson.room, 11);
+                if (irregular && lstext) {
+                  newLesson.dayAndFlags |= 7;
+                }
+                if (irregular && !periodName && !teacherName && !roomName && !lstext) {
+                  newLesson.name = "---";
+                  newLesson.room = "EVENT";
                 } else {
                   if (periodName)
-                    periodName->toCharArray(newLesson.name, 4);
+                    newLesson.name = *periodName;
+                  if (!periodName && lstext)
+                    if (lstext->startsWith("Jahrgangsstufentest ")) {
+                      newLesson.name = "JGST" + lstext->substring(19);
+                    } else {
+                      newLesson.name = *lstext;
+                    }
                   if (teacherName)
-                    teacherName->toCharArray(newLesson.teacher, 5);
+                    newLesson.teacher = *teacherName;
                   if (teacherLastname)
-                    teacherLastname->toCharArray(newLesson.teacherName, 32);
+                    newLesson.teacherName = *teacherLastname;
                   if (roomName)
-                    roomName->toCharArray(newLesson.room, 11);
+                    newLesson.room = *roomName;
                 }
                 if (cEndPeriod+1 > timeTable.maxPeriods) {
                   timeTable.maxPeriods = cEndPeriod+1;
                 }
-                timeTable.lessonGrid->push_back(newLesson);
+                if (!checkAndMergeExistingLesson(newLesson)) {
+                  //DEBUG_PRINTLN(String("Found double lesson: ") + newLesson.name);
+                  timeTable.lessonGrid->push_back(newLesson);
+                }
                 ret = true;
               }
             }
@@ -576,14 +655,139 @@ bool updateTimeTable(String payload) {
     }
   } else {
     DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
-    return false;
+    ret = false;
   }
+  allocator.deallocate();
+  return ret;
+}
+
+bool updateHomework(char *source) {
+  bool ret = false;
+  char *endptr;
+  JsonValue value;
+  JsonAllocator allocator;
+  int status = jsonParse(source, &endptr, &value, allocator);
+  if (status == JSON_OK) {
+    std::vector<Homework> *homework = new std::vector<Homework>();
+    if (value.getTag() == JSON_OBJECT) {
+      for(auto d:value) {
+        if (strcmp(d->key, "data") == 0 && d->value.getTag() == JSON_OBJECT) {
+          for(auto v:d->value) {
+            if (strcmp(v->key, "records") == 0 && v->value.getTag() == JSON_ARRAY) {
+              for(auto r:v->value) {
+                if (r->value.getTag() == JSON_OBJECT) {
+                  Homework *newHomework = nullptr;
+                  for(auto z:r->value) {
+                    if (strcmp(z->key, "homeworkId") == 0 && z->value.getTag() == JSON_NUMBER) {
+                      newHomework = new Homework{(uint16_t)z->value.toNumber()};
+                    } else if (newHomework && strcmp(z->key, "teacherId") == 0 && z->value.getTag() == JSON_NUMBER) {
+                      newHomework->teacher_id = z->value.toNumber();
+                      homework->push_back(*newHomework);
+                    }
+                  }
+                }
+              }
+            } else if (strcmp(v->key, "homeworks") == 0 && v->value.getTag() == JSON_ARRAY) {
+              for(auto h:v->value) {
+                if (h->value.getTag() == JSON_OBJECT) {
+                  Homework *newHomework = nullptr;
+                  for(auto z:h->value) {
+                    if (strcmp(z->key, "id") == 0 && z->value.getTag() == JSON_NUMBER) {
+                      uint16_t hwId = z->value.toNumber();
+                      for(auto &existingHomework:*homework) {
+                        if (existingHomework.id == hwId) {
+                          newHomework = &existingHomework;
+                          break;
+                        }
+                      }
+                    } else if (newHomework) {
+                      if (strcmp(z->key, "lessonId") == 0 && z->value.getTag() == JSON_NUMBER) {
+                        newHomework->subject_id = z->value.toNumber();
+                      } else if (strcmp(z->key, "dueDate") == 0 && z->value.getTag() == JSON_NUMBER) {
+                        newHomework->day = getNumDayOfWeekFromDate((uint32_t)z->value.toNumber());
+                      } else if (strcmp(z->key, "text") == 0 && z->value.getTag() == JSON_STRING) {
+                        newHomework->text = z->value.toString();
+                      }
+                    }
+                  }
+                }
+              }
+            } else if (strcmp(v->key, "teachers") == 0 && v->value.getTag() == JSON_ARRAY) {
+              for(auto t:v->value) {
+                if (t->value.getTag() == JSON_OBJECT) {
+                  std::vector<Homework*> *newHomeworks = new std::vector<Homework*>();
+                  for(auto z:t->value) {
+                    if (strcmp(z->key, "id") == 0 && z->value.getTag() == JSON_NUMBER) {
+                      const uint16_t teId = z->value.toNumber();
+                      for(auto &existingHomework:*homework) {
+                        if (existingHomework.teacher_id == teId) {
+                          newHomeworks->push_back(&existingHomework);
+                        }
+                      }
+                    } else if (strcmp(z->key, "name") == 0 && z->value.getTag() == JSON_STRING) {
+                      String teacherName = z->value.toString();
+                      for(auto *newHomework:*newHomeworks) {
+                        newHomework->teacher = teacherName;
+                        //DEBUG_PRINTLN(String("Set teacher name to " + newHomework->teacher + " for teacher id " + newHomework->teacher_id));
+                      }
+                    }
+                  }
+                  delete newHomeworks;
+                }
+              }
+            } else if (strcmp(v->key, "lessons") == 0 && v->value.getTag() == JSON_ARRAY) {
+              for(auto l:v->value) {
+                if (l->value.getTag() == JSON_OBJECT) {
+                  std::vector<Homework*> *newHomeworks = new std::vector<Homework*>();
+                  for(auto z:l->value) {
+                    if (strcmp(z->key, "id") == 0 && z->value.getTag() == JSON_NUMBER) {
+                      uint16_t subId = z->value.toNumber();
+                      for(auto &existingHomework:*homework) {
+                        if (existingHomework.subject_id == subId) {
+                          newHomeworks->push_back(&existingHomework);
+                        }
+                      }
+                    } else if (strcmp(z->key, "subject") == 0 && z->value.getTag() == JSON_STRING) {
+                      String subject = z->value.toString();
+                      const int ind = subject.indexOf('_');
+                      if (ind > -1) {
+                        subject.remove(ind);
+                      }
+                      for(auto *newHomework:*newHomeworks) {
+                        newHomework->subject = subject;
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    for(auto &hw:*homework) {
+      DEBUG_PRINT(String("Looking for matching homework for id ") + hw.id + " day " + hw.day + " teacher " + hw.teacher + " subject " + hw.subject);
+      for(auto &lesson:*timeTable.lessonGrid) {
+        if (lesson.name == hw.subject && lesson.teacher == hw.teacher && UPHA(lesson.dayAndFlags) == hw.day) {
+          lesson.dayAndFlags ^= 8;
+          DEBUG_PRINTLN(" -> Found!");
+        }
+      }
+    }
+    delete homework;
+    ret = true;
+  } else {
+    DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+    ret = false;
+  }
+  allocator.deallocate();
   return ret;
 }
 
 void setup() {
   Serial.begin(115200);
   while(!Serial) {}
+//#define SAVE_CREDENTIALS
 #ifdef SAVE_CREDENTIALS
   {
     preferences.begin(ESP_NAME);
@@ -592,6 +796,7 @@ void setup() {
     preferences.putString("WIFI_PASS", "****");
     preferences.putString("TIMEZONE", "TZ");
     preferences.putString("WU_SCHOOL", "SCHOOL");
+    preferences.putString("WU_SUBDOM", "SUBDOM");
     preferences.putString("WU_USER", "USER");
     preferences.putString("WU_PASS", "****");
     preferences.end();
@@ -632,7 +837,9 @@ void setup() {
 
     // get current time table for the week via WebUntis JSON RPC API
     if (webUntisLogin(*client)) {
-      updateDisplay |= updateTimeUnits(webUntisTimegrid(*client)) && updateTimeTable(webUntisTimetable(*client));
+      updateDisplay |= updateTimeUnits(webUntisTimegrid(*client).begin()) &&
+          updateTimeTable(webUntisTimetable(*client).begin()) &&
+          updateHomework(webUntisGetHomework(*client).begin());
       webUntisLogout(*client);
     }
   

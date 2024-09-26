@@ -6,7 +6,8 @@
 #include <u8g2_fonts.h>
 
 #define GxEPD2_DISPLAY_CLASS GxEPD2_7C
-#define GxEPD2_DRIVER_CLASS GxEPD2_565c
+#define GxEPD2_DRIVER_CLASS GxEPD2_730c_ACeP_730
+
 // Connections for e.g. LOLIN D32
 #define EPD_BUSY  4 // to EPD BUSY
 #define EPD_CS    5 // to EPD CS
@@ -22,19 +23,20 @@ GxEPD2_DISPLAY_CLASS<GxEPD2_DRIVER_CLASS, MAX_HEIGHT(GxEPD2_DRIVER_CLASS)> displ
 #undef MAX_DISPLAY_BUFFER_SIZE
 #undef MAX_HEIGHT
 
+SPIClass hspi(HSPI);
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
 
 void initialiseDisplay() {
-    display.init(115200, true, 20, false/*, *(new SPIClass(HSPI)), SPISettings(4000000, MSBFIRST, SPI_MODE0)*/);
-    SPI.end();
-    SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+    hspi.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+    display.epd2.selectSPI(hspi, SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    display.init(115200, true, 2, false);
     u8g2Fonts.begin(display);
     u8g2Fonts.setFontMode(1);
     u8g2Fonts.setFontDirection(0);
     u8g2Fonts.setForegroundColor(GxEPD_BLACK);
     u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
     u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-    display.fillScreen(GxEPD_WHITE);
+    display.clearScreen();
     display.setFullWindow();
 }
 
