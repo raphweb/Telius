@@ -336,12 +336,12 @@ void fillWithColor(uint16_t color) {
 }
 
 void clearAllColors() {
-  /*fillWithColor(GxEPD_BLACK);
+  fillWithColor(GxEPD_BLACK);
   fillWithColor(GxEPD_GREEN);
   fillWithColor(GxEPD_BLUE);
   fillWithColor(GxEPD_RED);
   fillWithColor(GxEPD_YELLOW);
-  fillWithColor(GxEPD_ORANGE);*/
+  fillWithColor(GxEPD_ORANGE);
   delay(1000);
 }
 
@@ -786,6 +786,8 @@ bool updateHomework(char *source) {
 }
 
 void setup() {
+  /*clearAllColors();
+  esp_deep_sleep_start();*/
   Serial.begin(115200);
   while(!Serial) {}
 //#define SAVE_CREDENTIALS
@@ -855,8 +857,7 @@ void setup() {
     WiFi.mode(WIFI_OFF);
     // display setup and printing
     initialiseDisplay();
-
-    clearAllColors();
+    
     display.firstPage();
     do {
       drawView1();
