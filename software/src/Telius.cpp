@@ -851,10 +851,10 @@ void setup() {
     DEBUG_PRINTLN("Unable to create client");
   }
   delay(1000);
+  WiFi.disconnect();
+  WiFi.mode(WIFI_OFF);
 
   if (updateDisplay) {
-    WiFi.disconnect();
-    WiFi.mode(WIFI_OFF);
     // display setup and printing
     initialiseDisplay();
     
@@ -865,15 +865,14 @@ void setup() {
 
     display.powerOff();
     DEBUG_PRINTLN("Display has been updated.");
-    DEBUG_PRINT("Waking up in ");
-    DEBUG_PRINT(secondsTillNextWakeup);
-    DEBUG_PRINTLN(" seconds.");
-    DEBUG_PRINTLN("Going to deep sleep...");
-    esp_sleep_enable_timer_wakeup(secondsTillNextWakeup * US_TO_SECONDS_FACTOR);
   } else {
-    DEBUG_PRINTLN("Waking up in " + String(SLEEP_DURATION) + " seconds...");
-    esp_sleep_enable_timer_wakeup(SLEEP_DURATION * US_TO_SECONDS_FACTOR);
+    DEBUG_PRINTLN("Nothing to update.");
   }
+  DEBUG_PRINT("Waking up in ");
+  DEBUG_PRINT(secondsTillNextWakeup);
+  DEBUG_PRINTLN(" seconds.");
+  DEBUG_PRINTLN("Going to deep sleep...");
+  esp_sleep_enable_timer_wakeup(secondsTillNextWakeup * US_TO_SECONDS_FACTOR);
   preferences.end();
 
   delay(1000);
