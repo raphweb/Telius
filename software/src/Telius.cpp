@@ -627,12 +627,13 @@ bool updateTimeTable(char *source) {
                 } else {
                   if (periodName)
                     newLesson.name = *periodName;
-                  if (!periodName && lstext)
+                  if (!periodName && lstext) {
                     if (lstext->startsWith("Jahrgangsstufentest ")) {
                       newLesson.name = "JGST" + lstext->substring(19);
                     } else {
                       newLesson.name = *lstext;
                     }
+                  }
                   if (teacherName)
                     newLesson.teacher = *teacherName;
                   if (teacherLastname)
