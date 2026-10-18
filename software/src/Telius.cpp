@@ -1,9 +1,9 @@
+#include "GxEPD2.h"
 #include <Arduino.h>
 
 #include <Preferences.h>
 #include <DisplayConfig.hpp>
 #include <WiFi.h>
-#include "time.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <gason.h>
@@ -11,24 +11,20 @@
 #include <vector>
 
 #define US_TO_SECONDS_FACTOR 1000000L
-#define SLEEP_DURATION 60 // in seconds
 
 #define ESP_NAME "telius"
 
-/**************************** DEBUG *******************************/
-#define DEBUG
-
-#ifdef DEBUG
-#define DEBUG_PRINTLN(m) Serial.println(m)
-#define DEBUG_PRINT(m) Serial.print(m)
-
+#if defined(CORE_DEBUG_LEVEL) && (CORE_DEBUG_LEVEL > 0)
+#define SETUP_SERIAL_CONSOLE \
+  esp_rom_install_uart_printf();\
+  delay(200);\
+  log_printf(ARDUHAL_LOG_COLOR_I "[%6u][ ][%s:%u] %s(): Started serial log." ARDUHAL_LOG_RESET_COLOR "\r\n", (unsigned long) (esp_timer_get_time() / 1000ULL), pathToFileName(__FILE__), __LINE__, __FUNCTION__);
 #else
-#define DEBUG_PRINTLN(m)
-#define DEBUG_PRINT(m)
-
-#define DEBUG_PRINTLNC(m)
-#define DEBUG_PRINTC(m)
+#define SETUP_SERIAL_CONSOLE
 #endif
+
+//#define SAVE_CREDENTIALS
+//#define SCREENCYCLING
 
 enum AlignmentKind {
   LEFT          = 1,
@@ -100,33 +96,29 @@ void setClock() {
   const String timezone = preferences.getString("TIMEZONE");
   configTzTime(timezone.c_str(), "pool.ntp.org");
 
-  DEBUG_PRINT("Waiting for NTP time sync: ");
+  log_i("Waiting for NTP time sync:");
   time_t nowSecs = time(nullptr);
   while (nowSecs < 3600) { // maximum wait for an hour
     delay(500);
-    DEBUG_PRINT(".");
+    log_d(".");
     yield();
     nowSecs = time(nullptr);
   }
 
-  DEBUG_PRINTLN();
   struct tm timeinfo;
   localtime_r(&nowSecs, &timeinfo);
-  DEBUG_PRINT("Current time: ");
-  DEBUG_PRINT(asctime(&timeinfo));
+  log_i("Current time: %s", asctime(&timeinfo));
 
   const uint8_t daysTillFriday = (12 - timeinfo.tm_wday) % 7;
   time_t nTimeSecs = nowSecs + 86400 * daysTillFriday;
   struct tm nTime;
   localtime_r(&nTimeSecs, &nTime);
-  DEBUG_PRINT("Next Friday: ");
   strftime(nextFriday, 9, "%Y%m%d", &nTime);
-  DEBUG_PRINTLN(nextFriday);
+  log_i("Next Friday: %s", nextFriday);
   nTimeSecs = nowSecs + 86400 * (daysTillFriday - 4);
   localtime_r(&nTimeSecs, &nTime);
-  DEBUG_PRINT("Current week Monday: ");
   strftime(currMonday, 9, "%Y%m%d", &nTime);
-  DEBUG_PRINTLN(currMonday);
+  log_i("Current week Monday: %s", currMonday);
   currentMonday = strtoul(currMonday, NULL, 10);
   fillDateWeekDays(nTimeSecs);
 
@@ -136,8 +128,7 @@ void setClock() {
   struct tm wTime;
   localtime_r(&wTimeSecs, &wTime);
   // the wakeup time will drift over time, but will always happen some time between WAKEUP_HOUR and WAKEUP_HOUR+1
-  DEBUG_PRINT("Next wakeup will be scheduled at: ");
-  DEBUG_PRINTLN(asctime(&wTime));
+  log_i("Next wakeup will be scheduled at: %s", asctime(&wTime));
 }
 
 #define LOHA(n) (n&15) // lower half of a byte
@@ -223,8 +214,8 @@ bool checkAndMergeExistingLesson(TTLesson &newLesson) {
       } else if (timeTable.periods->at(UPHA(exLesson.lesson)).time1 == timeTable.periods->at(LOHA(newLesson.lesson)).time2) {
         exLesson.lesson = (exLesson.lesson & 0x0F) ^ (newLesson.lesson & 0xF0);
       }
-      //DEBUG_PRINTLN(String("  Start of (ex, new): ") + String(LOHA(exLesson.lesson)) + ", " + String(LOHA(newLesson.lesson)));
-      //DEBUG_PRINTLN(String("  End   of (ex, new): ") + String(UPHA(exLesson.lesson)) + ", " + String(LOHA(newLesson.lesson)));
+      log_d("  Start of (ex, new): %d, %d", LOHA(exLesson.lesson), LOHA(newLesson.lesson));
+      log_d("  End   of (ex, new): %d, %d", UPHA(exLesson.lesson), LOHA(newLesson.lesson));
       return true;
     }
   }
@@ -241,7 +232,7 @@ void fillDateWeekDays(const time_t mondayDate) {
     strftime(currentDayStr, 9, "%Y%m%d", &nTime);
     uint32_t currentDayUInt32 = strtoul(currentDayStr, NULL, 10);
     timeTable.dateWeekDay[i] = currentDayUInt32;
-    DEBUG_PRINTLN("Date " + String(currentDayUInt32) + " is " + String(i) + " day of the week.");
+    log_i("Date %d is %d. day of the week.", currentDayUInt32, i);
   }
 }
 
@@ -272,6 +263,9 @@ uint8_t getPeriodNumberForEndTime(uint16_t endTime) {
 #define rowHeight 34
 #define coluWidth 144
 
+const uint16_t normFG = GxEPD_BLACK;
+const uint16_t screenBG = GxEPD_WHITE;
+const uint16_t normBG = GxEPD_YELLOW;
 const uint16_t emphBG = GxEPD_ORANGE;
 const String hwIcon = "H";
 
@@ -289,22 +283,22 @@ void drawString(int16_t x, int16_t y, const String &text, const AlignmentKind al
 }
 
 void drawView1() {
-  display.fillScreen(GxEPD_WHITE);
+  display.fillScreen(screenBG);
   u8g2Fonts.setFont(u8g2_font_helvB18_tf);
-  u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+  u8g2Fonts.setBackgroundColor(screenBG);
   for(uint8_t cDay = 0; cDay < timeTable.maxDays; cDay++) {
-    display.drawFastVLine(79 + cDay*coluWidth, 6, 35, GxEPD_BLACK);
+    display.drawFastVLine(79 + cDay*coluWidth, 6, 35, normFG);
     drawString(79 + coluWidth/2 + cDay*coluWidth, 33, timeTable.days[cDay], BOTTOM_CENTER);
   }
   for(uint8_t cPeriod = 0; cPeriod < timeTable.maxPeriods; cPeriod++) {
     const auto& row = timeTable.periods->at(cPeriod);
-    display.drawFastHLine(0, 10 + row.offset, 79, GxEPD_BLACK);
+    display.drawFastHLine(0, 10 + row.offset, 79, normFG);
     const char time1[] = getTimeStrForTime(row.time1);
     drawString(38, 35 + row.offset, time1, BOTTOM_CENTER);
-    display.drawFastHLine(15, 10 + rowHeight + row.offset, 40, GxEPD_BLACK);
+    display.drawFastHLine(15, 10 + rowHeight + row.offset, 40, normFG);
     const char time2[] = getTimeStrForTime(row.time2);
     drawString(38, 35 + row.offset + rowHeight, time2, BOTTOM_CENTER);
-    display.drawFastHLine(0, 10 + rowHeight*2 + row.offset, 79, GxEPD_BLACK);
+    display.drawFastHLine(0, 10 + rowHeight*2 + row.offset, 79, normFG);
   }
   // fill time table
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
@@ -312,13 +306,13 @@ void drawView1() {
     const uint16_t columnOffset = 79 + UPHA(lesson.dayAndFlags)*coluWidth;
     const uint16_t rowStartOffset = timeTable.periods->at(UPHA(lesson.lesson)).offset;
     const uint16_t lessonHeight = timeTable.periods->at(LOHA(lesson.lesson)).offset - rowStartOffset + 2*rowHeight;
-    display.fillRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, (lesson.dayAndFlags&7) == 7 ? GxEPD_ORANGE : GxEPD_YELLOW);
-    display.drawRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, GxEPD_BLACK);
-    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&4) == 4 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    display.fillRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, (lesson.dayAndFlags&7) == 7 ? emphBG : normBG);
+    display.drawRect(columnOffset, 10 + rowStartOffset, coluWidth + 1, lessonHeight + 1, normFG);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&4) == 4 ? emphBG : normBG);
     drawString(columnOffset +             4, 34 + rowStartOffset,    lesson.name, BOTTOM_LEFT, (lesson.dayAndFlags&4) == 4);
-    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&1) == 1 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&1) == 1 ? emphBG : normBG);
     drawString(columnOffset + coluWidth - 4, 34 + rowStartOffset,    lesson.room, BOTTOM_RIGHT, (lesson.dayAndFlags&1) == 1);
-    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&2) == 2 ? GxEPD_ORANGE : GxEPD_YELLOW);
+    u8g2Fonts.setBackgroundColor((lesson.dayAndFlags&2) == 2 ? emphBG : normBG);
     drawString(columnOffset +             4, 34 + rowStartOffset + rowHeight, lesson.teacherName, BOTTOM_LEFT, (lesson.dayAndFlags&2) == 2);
     if (lesson.dayAndFlags&8) {
       drawString(columnOffset + coluWidth - 4, 34 + rowStartOffset + rowHeight, hwIcon, BOTTOM_RIGHT, false);
@@ -326,22 +320,29 @@ void drawView1() {
   }
 }
 
-void fillWithColor(uint16_t color) {
+#ifdef SCREENCYCLING
+void fillWithColor(uint16_t color, String colorName) {
   display.firstPage();
   do {
     display.fillScreen(color);
   } while (display.nextPage());
+  log_i("Now displaying: %s.", colorName.c_str());
+  delay(10000);
 }
 
-void clearAllColors() {
-  fillWithColor(GxEPD_BLACK);
-  fillWithColor(GxEPD_GREEN);
-  fillWithColor(GxEPD_BLUE);
-  fillWithColor(GxEPD_RED);
-  fillWithColor(GxEPD_YELLOW);
-  fillWithColor(GxEPD_ORANGE);
-  delay(1000);
+void clearAllColors(const uint8_t numCycles) {
+  log_i("Starting screen cycling.");
+  for(uint8_t i = 0; i < numCycles; i++) {
+    fillWithColor(GxEPD_BLACK, "black");
+    fillWithColor(GxEPD_GREEN, "green");
+    fillWithColor(GxEPD_BLUE, "blue");
+    fillWithColor(GxEPD_RED, "red");
+    fillWithColor(GxEPD_YELLOW, "yellow");
+    fillWithColor(GxEPD_ORANGE, "orange");
+    log_i("Cycle %d finished.", i);
+  }
 }
+#endif
 
 SessionData *currentSession = nullptr;
 
@@ -350,19 +351,19 @@ bool webUntisLogin(WiFiClientSecure &client) {
   const String subdom = preferences.getString("WU_SUBDOM");
   const String user = preferences.getString("WU_USER");
   const String pass = preferences.getString("WU_PASS");
-  //DEBUG_PRINTLN("Loaded WebUntis school: " + school + ", subdomain: " + subdom + ", user: " + user + ", pass: " + pass);
+  log_d("Loaded WebUntis school: %s, subdomain: %s, user: %s, pass: %s", school.c_str(), subdom.c_str(), user.c_str(), pass.c_str());
 
   if (https.begin(client, "https://" + subdom + ".webuntis.com/WebUntis/jsonrpc.do?school=" + school)) {
     int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"authenticate\",\"params\":{\"user\":\""
         + user + "\",\"password\":\"" + pass + "\",\"client\":\"" + String(ESP_NAME) + "243\"},\"jsonrpc\":\"2.0\"}");
 
     if (httpCode > 0) {
-      DEBUG_PRINTLN("[HTTPS] POST authenticate... code: " + String(httpCode));
+      log_i("[HTTPS] POST authenticate... code: %d", httpCode);
 
       if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
         String payload = https.getString();
-        DEBUG_PRINTLN(payload);
         char *source = payload.begin();
+        log_v("%s", source);
         char *endptr;
         JsonValue value;
         JsonAllocator allocator;
@@ -391,7 +392,7 @@ bool webUntisLogin(WiFiClientSecure &client) {
             if (sessionId) {
               currentSession = new SessionData{klasseId, personId,
                   String("JSESSIONID=" + *sessionId + "; schoolname=_" + base64::encode(school)), personType};
-              DEBUG_PRINTLN("Using session id: " + currentSession->sessionCookie);
+              log_i("Using session id: %s", currentSession->sessionCookie.c_str());
               https.end();
               return true;
             } else {
@@ -400,14 +401,14 @@ bool webUntisLogin(WiFiClientSecure &client) {
             }
           }
         } else {
-          DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+          log_e("%s at %d", jsonStrError(status), endptr - source);
           https.end();
           return false;
         }
         allocator.deallocate();
       }
     } else {
-      DEBUG_PRINTLN("[HTTPS] authenticate... failed, error: " + https.errorToString(httpCode));
+      log_e("[HTTPS] authenticate... failed, error: %s", https.errorToString(httpCode).c_str());
       https.end();
       return false;
     }
@@ -424,15 +425,15 @@ String webUntisRequest(WiFiClientSecure &client, String method, String params = 
       https.addHeader("Cookie", currentSession->sessionCookie);
       int httpCode = https.POST("{\"id\":\"" + String(ESP_NAME) + "243\",\"method\":\"" + method + "\",\"params\":{" + params + "},\"jsonrpc\":\"2.0\"}");
       if (httpCode > 0) {
-        DEBUG_PRINTLN("[HTTPS] POST " + method + "... code: " + httpCode);
+        log_i("[HTTPS] POST %s... code: %d", method.c_str(), httpCode);
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
           String payload = https.getString();
-          DEBUG_PRINTLN(payload);
+          log_v("%s", payload.begin());
           https.end();
           return payload;
         }
       } else {
-        DEBUG_PRINTLN("[HTTPS] POST " + method + "... failed, error: " + https.errorToString(httpCode));
+        log_e("[HTTPS] POST %s... failed, error: %s", method.c_str(), https.errorToString(httpCode).c_str());
       }
       https.end();
     }
@@ -447,15 +448,15 @@ String webUntisGetHomework(WiFiClientSecure &client) {
       https.addHeader("Cookie", currentSession->sessionCookie);
       int httpCode = https.GET();
       if (httpCode > 0) {
-        DEBUG_PRINTLN("[HTTPS] GET homework... code: " + httpCode);
+        log_i("[HTTPS] GET homework... code: %d", httpCode);
         if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
           String payload = https.getString();
-          DEBUG_PRINTLN(payload);
+          log_v("%s", payload.begin());
           https.end();
           return payload;
         }
       } else {
-        DEBUG_PRINTLN("[HTTPS] GET homework... failed, error: " + https.errorToString(httpCode));
+        log_e("[HTTPS] GET homework... failed, error: %s", https.errorToString(httpCode).c_str());
       }
       https.end();
     }
@@ -558,7 +559,7 @@ bool updateTimeUnits(char *source) {
       }
     }
   } else {
-    DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+    log_e("%s at %d", jsonStrError(status), endptr - source);
     return false;
   }
   allocator.deallocate();
@@ -654,7 +655,7 @@ bool updateTimeTable(char *source) {
       }
     }
   } else {
-    DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+    log_e("%s at %d", jsonStrError(status), endptr - source);
     ret = false;
   }
   allocator.deallocate();
@@ -728,7 +729,7 @@ bool updateHomework(char *source) {
                       String teacherName = z->value.toString();
                       for(auto *newHomework:*newHomeworks) {
                         newHomework->teacher = teacherName;
-                        //DEBUG_PRINTLN(String("Set teacher name to " + newHomework->teacher + " for teacher id " + newHomework->teacher_id));
+                        log_d("Set teacher name to %s for teacher id %d", newHomework->teacher.c_str(), newHomework->teacher_id);
                       }
                     }
                   }
@@ -766,22 +767,20 @@ bool updateHomework(char *source) {
       }
     }
     for(auto &hw:*homework) {
-      DEBUG_PRINT(String("Looking for matching homework for id ") + hw.id + " day " + hw.day + " teacher " + hw.teacher + " subject " + hw.subject);
+      log_i("Looking for matching homework for id %d day %d teacher %s subject %s", hw.id, hw.day, hw.teacher.c_str(), hw.subject.c_str());
       for(auto &lesson:*timeTable.lessonGrid) {
-        //DEBUG_PRINTLN();
-        //DEBUG_PRINT(String("Considering teacher: ") + lesson.teacherName + " subject " + lesson.name);
+        log_d("Considering teacher: %s subject %s",lesson.teacherName, lesson.name);
         if (lesson.name == hw.subject && hw.teacher.startsWith(lesson.teacherName) && UPHA(lesson.dayAndFlags) == hw.day) {
           lesson.dayAndFlags ^= 8;
-          DEBUG_PRINT(" -> Found!");
+          log_i(" -> Found!");
           break;
         }
       }
-      DEBUG_PRINTLN();
     }
     delete homework;
     ret = true;
   } else {
-    DEBUG_PRINTLN(String(jsonStrError(status)) + " at " + String(endptr - source));
+    log_e("%s at %d",jsonStrError(status), endptr - source);
     ret = false;
   }
   allocator.deallocate();
@@ -789,11 +788,7 @@ bool updateHomework(char *source) {
 }
 
 void setup() {
-  /*clearAllColors();
-  esp_deep_sleep_start();*/
-  Serial.begin(115200);
-  while(!Serial) {}
-//#define SAVE_CREDENTIALS
+  SETUP_SERIAL_CONSOLE
 #ifdef SAVE_CREDENTIALS
   {
     preferences.begin(ESP_NAME);
@@ -809,13 +804,18 @@ void setup() {
     esp_deep_sleep_start();
   }
 #endif
+#ifdef SCREENCYCLING
+  initialiseDisplay();
+  clearAllColors(20);
+  esp_deep_sleep_start();
+#endif
   preferences.begin(ESP_NAME, true);
   const String wifissid = preferences.getString("WIFI_SSID");
   const String wifipass = preferences.getString("WIFI_PASS");
-  //DEBUG_PRINTLN("Loaded SSID: " + wifissid + ", PASS: " + wifipass);
+  log_d("Loaded SSID: %s, PASS: %s", wifissid.c_str(), wifipass.c_str());
   
   // Connect to Wi-Fi network with SSID and password
-  DEBUG_PRINTLN("Connecting to " + wifissid);
+  log_i("Connecting to %s", wifissid.c_str());
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifissid.c_str(), wifipass.c_str());
@@ -823,15 +823,14 @@ void setup() {
   WiFi.setAutoConnect(true);
   WiFi.setAutoReconnect(true);
   if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    DEBUG_PRINTLN("WiFi connection failed! Code " + WiFi.waitForConnectResult());
+    log_e("WiFi connection failed! Code %d", WiFi.waitForConnectResult());
     delay(1000);
     ESP.restart();
   }
   setClock();
   // Print local IP
-  DEBUG_PRINTLN("WiFi connected.");
-  DEBUG_PRINT("IP address: ");
-  DEBUG_PRINTLN(WiFi.localIP());
+  log_i("WiFi connected.");
+  log_i("IP address: %s", WiFi.localIP().toString().c_str());
 
   bool updateDisplay = false;
 
@@ -851,7 +850,7 @@ void setup() {
   
     delete client;
   } else {
-    DEBUG_PRINTLN("Unable to create client");
+    log_e("Unable to create client");
   }
   delay(1000);
   WiFi.disconnect();
@@ -860,21 +859,18 @@ void setup() {
   if (updateDisplay) {
     // display setup and printing
     initialiseDisplay();
-    
     display.firstPage();
     do {
       drawView1();
     } while (display.nextPage());
 
     display.powerOff();
-    DEBUG_PRINTLN("Display has been updated.");
+    log_i("Display has been updated.");
   } else {
-    DEBUG_PRINTLN("Nothing to update.");
+    log_i("Nothing to update.");
   }
-  DEBUG_PRINT("Waking up in ");
-  DEBUG_PRINT(secondsTillNextWakeup);
-  DEBUG_PRINTLN(" seconds.");
-  DEBUG_PRINTLN("Going to deep sleep...");
+  log_i("Waking up in %d seconds", secondsTillNextWakeup);
+  log_i("Going to deep sleep...");
   esp_sleep_enable_timer_wakeup(secondsTillNextWakeup * US_TO_SECONDS_FACTOR);
   preferences.end();
 
